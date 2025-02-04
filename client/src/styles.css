@@ -1,0 +1,15 @@
+.card-image {
+  width: 80px; /* Adjust width for better visibility */
+  height: 120px; /* Adjust height accordingly */
+  margin: 5px;
+  border-radius: 5px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.hand-container {
+  margin-top: 20px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
