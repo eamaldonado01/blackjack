@@ -17,68 +17,102 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-// In-memory state for single player
+// In-memory state
 let gameState = {
   deck: [],
-  playerHands: [[]], // Supports multiple hands if split occurs
+  playerHands: [[]],
   dealerHand: [],
   gameOver: false,
   message: '',
   bet: 0,
-  balance: 300, // Starting balance
+  balance: 300,
   currentHandIndex: 0,
   splitOccurred: false,
 };
 
-// Helper to reset or prepare a new round
-function resetGameState() {
-  gameState.deck = [];
-  gameState.playerHands = [[]];
-  gameState.dealerHand = [];
-  gameState.gameOver = false;
-  gameState.message = '';
-  gameState.bet = 0;
-  gameState.currentHandIndex = 0;
-  gameState.splitOccurred = false;
-  // Note: we do NOT reset balance here, so the player keeps winnings.
+/**
+ * Reset everything EXCEPT balance if the game
+ * is still in progress, to preserve continuous play
+ */
+function resetGameStateIfNeeded() {
+  // If game is over or no cards have been dealt, reset
+  if (gameState.gameOver || gameState.playerHands[0].length === 0) {
+    gameState.deck = [];
+    gameState.playerHands = [[]];
+    gameState.dealerHand = [];
+    gameState.gameOver = false;
+    gameState.message = '';
+    gameState.bet = 0;
+    gameState.currentHandIndex = 0;
+    gameState.splitOccurred = false;
+    // We do NOT reset `balance` here to allow continuous play
+  }
 }
 
-// Route to start a new game
+// Check for Blackjack (two-card 21)
+function checkForBlackjack(hand) {
+  return hand.length === 2 && calculateHandValue(hand) === 21;
+}
+
+// --------------------- ROUTES ---------------------
+
+/**
+ * POST /start
+ * - Deducts bet from balance
+ * - Deals initial cards
+ * - Checks immediate Blackjack
+ */
 app.post('/start', (req, res) => {
   const { bet } = req.body;
 
-  // If there's already a game over, let's reset the deck
-  // so we can start fresh
-  if (gameState.gameOver || gameState.playerHands[0].length > 0) {
-    resetGameState();
-  }
+  // Reset only if needed (game over or no round in progress)
+  resetGameStateIfNeeded();
 
-  // Check if user has enough balance
+  // Validate bet
   if (bet > gameState.balance) {
     return res.status(400).json({ message: 'Insufficient balance for this bet.' });
   }
+  if (bet <= 0) {
+    return res.status(400).json({ message: 'Bet must be greater than 0.' });
+  }
 
+  // Create and shuffle
   let deck = createDeck();
   deck = shuffleDeck(deck);
 
+  // Deal
   const playerHand = [deck.pop(), deck.pop()];
   const dealerHand = [deck.pop(), deck.pop()];
 
-  const playerValue = calculateHandValue(playerHand);
-  const dealerValue = calculateHandValue(dealerHand);
-
-  // Prepare the in-memory state
   gameState.deck = deck;
   gameState.playerHands = [playerHand];
   gameState.dealerHand = dealerHand;
   gameState.gameOver = false;
-  gameState.message = `Player: ${playerValue}, Dealer shows: ${dealerHand[0].rank} of ${dealerHand[0].suit}`;
   gameState.bet = bet;
-  gameState.balance -= bet; // subtract bet from balance
+  gameState.balance -= bet; // Subtract bet
   gameState.currentHandIndex = 0;
   gameState.splitOccurred = false;
 
-  res.json({
+  // Check values
+  const playerValue = calculateHandValue(playerHand);
+  const dealerValue = calculateHandValue(dealerHand);
+
+  let message = `Dealer shows: ${dealerHand[0].rank} of ${dealerHand[0].suit}`;
+
+  // Immediate Blackjack?
+  if (checkForBlackjack(playerHand)) {
+    const blackjackWin = Math.round(gameState.bet * 2.5);
+    gameState.balance += blackjackWin;
+    gameState.gameOver = true;
+    message = 'Blackjack! Player wins!';
+  } else {
+    // Hide actual playerValue to preserve ??? logic if desired
+    message = `Player: ???, ` + message;
+  }
+
+  gameState.message = message;
+
+  return res.json({
     message: gameState.message,
     playerHand,
     dealerHand: [dealerHand[0], { suit: 'Hidden', rank: 'Hidden' }],
@@ -86,27 +120,55 @@ app.post('/start', (req, res) => {
   });
 });
 
-// Route to handle Hit action
+/**
+ * POST /hit
+ */
 app.post('/hit', (req, res) => {
   const { handIndex } = req.body;
 
   if (gameState.gameOver) {
-    return res.json({ message: 'Game is already over.' });
+    return res.json({
+      message: 'Game is already over.',
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+      gameOver: true,
+    });
   }
 
+  // If already blackJack => no further actions
+  if (checkForBlackjack(gameState.playerHands[handIndex])) {
+    return res.json({
+      message: 'Blackjack already!',
+      gameOver: true,
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+    });
+  }
+
+  // Draw card
   const newCard = gameState.deck.pop();
   gameState.playerHands[handIndex].push(newCard);
 
+  // Check bust
   const playerValue = calculateHandValue(gameState.playerHands[handIndex]);
-
   if (playerValue > 21) {
-    gameState.message = `Hand ${handIndex + 1} busts with ${playerValue}.`;
+    // If no split => "Player busts!"
+    if (!gameState.splitOccurred) {
+      gameState.message = 'Player busts!';
+    } else {
+      gameState.message = `Hand ${handIndex + 1} busts with ${playerValue}.`;
+    }
     gameState.gameOver = true;
   } else {
-    gameState.message = `Hand ${handIndex + 1} now has ${playerValue}.`;
+    // If no split => "Player now has X"
+    if (!gameState.splitOccurred) {
+      gameState.message = `Player now has ${playerValue}.`;
+    } else {
+      gameState.message = `Hand ${handIndex + 1} now has ${playerValue}.`;
+    }
   }
 
-  res.json({
+  return res.json({
     message: gameState.message,
     gameOver: gameState.gameOver,
     playerHands: gameState.playerHands,
@@ -114,54 +176,77 @@ app.post('/hit', (req, res) => {
   });
 });
 
-// Route to handle Stand action
+/**
+ * POST /stand
+ */
 app.post('/stand', (req, res) => {
   if (gameState.gameOver) {
-    return res.json({ message: 'Game is already over.' });
+    return res.json({
+      message: 'Game is already over.',
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+      gameOver: true,
+    });
   }
 
+  // If immediate blackjack => no further actions
+  if (checkForBlackjack(gameState.playerHands[0])) {
+    return res.json({
+      message: 'You already have Blackjack!',
+      gameOver: true,
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+      balance: gameState.balance,
+    });
+  }
+
+  // Dealer draws to 17
   let dealerValue = calculateHandValue(gameState.dealerHand);
-  // Dealer draws until at least 17
   while (dealerValue < 17) {
     gameState.dealerHand.push(gameState.deck.pop());
     dealerValue = calculateHandValue(gameState.dealerHand);
   }
 
+  // Compare results
   let outcome = 'dealer-win';
-  let message = '';
+  let finalMessage = '';
 
-  // Compare each of the player's hands to the dealer
   gameState.playerHands.forEach((hand, idx) => {
-    const playerVal = calculateHandValue(hand);
+    const pVal = calculateHandValue(hand);
 
-    if (playerVal > 21) {
-      message += `Hand ${idx + 1} busts! `;
-    } else if (dealerValue > 21 || playerVal > dealerValue) {
+    if (pVal > 21) {
+      if (!gameState.splitOccurred) {
+        finalMessage += 'Player busts! ';
+      } else {
+        finalMessage += `Hand ${idx + 1} busts! `;
+      }
+    } else if (dealerValue > 21 || pVal > dealerValue) {
       outcome = 'player-win';
-      message += `Hand ${idx + 1} wins with ${playerVal} vs dealer ${dealerValue}. `;
-    } else if (playerVal === dealerValue) {
+      if (!gameState.splitOccurred) {
+        finalMessage += 'Player wins! ';
+      } else {
+        finalMessage += `Hand ${idx + 1} wins! `;
+      }
+    } else if (pVal === dealerValue) {
       outcome = 'tie';
-      message += `Hand ${idx + 1} ties with ${playerVal}. `;
+      finalMessage += 'Tie! ';
     } else {
-      // dealer is strictly greater
-      message += `Hand ${idx + 1} loses with ${playerVal} vs dealer ${dealerValue}. `;
+      finalMessage += 'Dealer wins! ';
     }
   });
 
   gameState.gameOver = true;
-  gameState.message = message;
+  gameState.message = finalMessage.trim();
 
-  // Adjust balance based on outcome
+  // Handle balance
   if (outcome === 'player-win') {
-    // normal: double the bet
     gameState.balance += gameState.bet * 2;
   } else if (outcome === 'tie') {
-    // return bet
     gameState.balance += gameState.bet;
   }
 
-  res.json({
-    message,
+  return res.json({
+    message: gameState.message,
     gameOver: true,
     outcome,
     balance: gameState.balance,
@@ -170,14 +255,24 @@ app.post('/stand', (req, res) => {
   });
 });
 
-// Route to handle Double action
+/**
+ * POST /double
+ */
 app.post('/double', (req, res) => {
   const { handIndex } = req.body;
 
   if (gameState.gameOver) {
     return res.json({ message: 'Game is already over.' });
   }
-
+  if (checkForBlackjack(gameState.playerHands[handIndex])) {
+    return res.json({
+      message: 'Cannot double after Blackjack!',
+      gameOver: true,
+      balance: gameState.balance,
+      playerHands: gameState.playerHands,
+      dealerHand: gameState.dealerHand,
+    });
+  }
   if (gameState.balance < gameState.bet) {
     return res.json({ message: 'Insufficient balance to double down.' });
   }
@@ -186,19 +281,20 @@ app.post('/double', (req, res) => {
   gameState.balance -= gameState.bet;
   gameState.bet *= 2;
 
-  // Player draws exactly 1 card
+  // Player draws 1 card
   const newCard = gameState.deck.pop();
   gameState.playerHands[handIndex].push(newCard);
 
   const value = calculateHandValue(gameState.playerHands[handIndex]);
-  let message = `Hand ${handIndex + 1} doubles to a final value of ${value}.`;
-
   if (value > 21) {
-    // busted
-    message += ` Hand ${handIndex + 1} busts!`;
+    if (!gameState.splitOccurred) {
+      gameState.message = 'Player busts after Double!';
+    } else {
+      gameState.message = `Hand ${handIndex + 1} busts after double!`;
+    }
     gameState.gameOver = true;
     return res.json({
-      message,
+      message: gameState.message,
       gameOver: true,
       balance: gameState.balance,
       playerHands: gameState.playerHands,
@@ -207,39 +303,32 @@ app.post('/double', (req, res) => {
     });
   }
 
-  // If not busted, we effectively "stand" for this hand
-  // We'll reuse the existing stand logic to handle the dealer turn & results
-  // Trick: call the stand route internally
-  req.url = '/stand'; // rewrite URL
+  // If not busted, we effectively stand
+  req.url = '/stand'; 
   req.method = 'POST';
   app._router.handle(req, res);
 });
 
-// Route to handle Split action
+/**
+ * POST /split
+ */
 app.post('/split', (req, res) => {
   if (gameState.gameOver) {
     return res.json({ message: 'Game is already over.' });
   }
-
-  // We only allow 1 split right now
   if (gameState.splitOccurred || gameState.playerHands.length !== 1) {
     return res.json({ message: 'Split not allowed.' });
   }
 
   const [hand] = gameState.playerHands;
-  // Official Blackjack: if first 2 cards have the same "rank" or both are 10-value cards
-  // We'll just check if exact same rank for simplicity
-  const rank1 = hand[0].rank;
-  const rank2 = hand[1].rank;
-  if (hand.length !== 2 || rank1 !== rank2) {
+  if (hand.length !== 2 || hand[0].rank !== hand[1].rank) {
     return res.json({ message: 'Cannot split unless both cards have the same rank.' });
   }
-
   if (gameState.balance < gameState.bet) {
     return res.json({ message: 'Insufficient balance to split.' });
   }
 
-  // Double the bet for the second hand
+  // Double the bet
   gameState.balance -= gameState.bet;
   gameState.bet *= 2;
 
@@ -250,7 +339,7 @@ app.post('/split', (req, res) => {
   gameState.splitOccurred = true;
   gameState.message = 'You split your cards!';
 
-  res.json({
+  return res.json({
     message: gameState.message,
     gameOver: gameState.gameOver,
     balance: gameState.balance,
@@ -259,10 +348,17 @@ app.post('/split', (req, res) => {
   });
 });
 
-// OPTIONAL: If you'd like a "reset" route to let user start fresh
+// Optional: reset route
 app.post('/reset', (req, res) => {
-  resetGameState();
-  // Keep the same balance or reset it—your choice
-  gameState.balance = 300; // example if you want to restart from $300
-  res.json({ message: 'Game reset.', balance: gameState.balance });
+  gameState.deck = [];
+  gameState.playerHands = [[]];
+  gameState.dealerHand = [];
+  gameState.gameOver = false;
+  gameState.message = '';
+  gameState.bet = 0;
+  gameState.currentHandIndex = 0;
+  gameState.splitOccurred = false;
+  gameState.balance = 300;
+
+  return res.json({ message: 'Game reset.', balance: gameState.balance });
 });

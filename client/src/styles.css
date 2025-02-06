@@ -1,5 +1,6 @@
 /* styles.css */
 
+/* Global */
 body {
   margin: 0;
   padding: 0;
@@ -8,33 +9,153 @@ body {
   color: #fff;
 }
 
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
+.table-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background-color: #0b6e0b; /* green table background */
+  overflow: hidden;
+}
+
+/* Title at the initial screen (Blackjack) */
+.title-banner {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 3rem;
+  z-index: 11;
+}
+
+/* Message Display - lower so it's closer to chips */
+.message-display {
+  position: absolute;
+  top: 60%; /* lowered from 40% to 60% */
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  background-color: #333;
+  z-index: 1;
+}
+
+/* Balance & Bet Buttons (top-right) */
+.balance-section {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+}
+
+/* Shared button style for cohesive look */
+.common-button {
+  font-size: 1rem;
+  background-color: rgba(0,0,0,0.5);
+  padding: 10px 14px;
   border-radius: 8px;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+.common-button:hover {
+  background-color: rgba(0,0,0,0.7);
 }
 
-.chips-container {
-  margin: 10px 0;
-}
-
-.chips-container button {
-  margin-right: 5px;
-}
-
-.hand-container {
-  display: inline-block;
-  margin: 10px;
+/* The "Balance" & "Current Bet" are disabled but share style */
+.balance-button,
+.bet-button {
+  font-size: 1rem;
+  background-color: rgba(0,0,0,0.5);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  color: #fff;
+  cursor: default;
+  width: 150px;
   text-align: center;
 }
 
+/* Chips Row (bottom center) */
+.chips-row {
+  position: absolute;
+  bottom: 120px;
+  width: 100%;
+  text-align: center;
+  z-index: 10;
+}
+.chip-image {
+  width: 60px;
+  height: 60px;
+  margin: 0 5px;
+  cursor: pointer;
+}
+
+/* Bet Actions (Clear, Deal) - bottom center */
+.bet-actions {
+  position: absolute;
+  bottom: 60px;
+  width: 100%;
+  text-align: center;
+  z-index: 10;
+}
+.bet-actions button {
+  margin: 0 10px;
+}
+
+/* Dealer Area */
+.dealer-area {
+  position: absolute;
+  top: 10%; /* moved upward from 20% => leaves space for messages */
+  width: 100%;
+  text-align: center;
+  z-index: 1;
+}
+.dealer-area h2 {
+  margin-bottom: 5px;
+}
+
+/* Player Area */
+.player-area {
+  position: absolute;
+  bottom: 10%;
+  width: 100%;
+  text-align: center;
+  z-index: 1;
+}
+.player-hand-container h2 {
+  margin-bottom: 5px;
+}
+
+/* Card Images */
 .card-image {
   width: 70px;
   height: 100px;
   margin: 5px;
   border-radius: 4px;
   box-shadow: 1px 1px 5px rgba(0,0,0,0.5);
+}
+
+/* Action Buttons - center-left, vertical, spaced */
+.action-buttons {
+  position: absolute;
+  left: 5%;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 10;
+}
+.action-buttons .common-button {
+  width: 120px;
+}
+
+/* New Round Button (same style, placed near bottom center) */
+.new-round-button {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  transform: translateX(-50%);
+  z-index: 15;
 }
