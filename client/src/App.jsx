@@ -6,6 +6,54 @@
 import React, { useState } from 'react';
 import './styles.css';
 
+// A helper to calculate the local player's hand value
+// We'll use it to decide if Double is allowed (9,10,11 without an Ace)
+function getLocalHandValue(cards) {
+  // Minimal calculation for local reference
+  // This is separate from the server's official logic
+  let total = 0;
+  let aceCount = 0;
+  for (let card of cards) {
+    if (card.rank === 'Hidden') continue; // ignore hidden card
+    switch (card.rank) {
+      case 'A':
+      case 'Ace':
+        aceCount += 1;
+        total += 1; // treat Ace as 1 initially
+        break;
+      case 'K':
+      case 'King':
+      case 'Q':
+      case 'Queen':
+      case 'J':
+      case 'Jack':
+        total += 10;
+        break;
+      default:
+        total += Number(card.rank) || 0;
+        break;
+    }
+  }
+  // Convert Aces from 1 to 11 if it doesn't bust
+  while (aceCount > 0) {
+    if (total + 10 <= 21) {
+      total += 10;
+    }
+    aceCount -= 1;
+  }
+  return total;
+}
+
+// A helper to see if the local hand has an Ace
+function localHandHasAce(cards) {
+  for (let card of cards) {
+    if (card.rank === 'A' || card.rank === 'Ace') {
+      return true;
+    }
+  }
+  return false;
+}
+
 function App() {
   const [message, setMessage] = useState('');
   const [playerHands, setPlayerHands] = useState([[]]);
@@ -57,10 +105,17 @@ function App() {
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
       const data = await response.json();
+
+      // If the server says "Blackjack! Player wins!"
+      if (data.message.includes('Blackjack! Player wins!')) {
+        setGameOver(true);
+      } else {
+        setGameOver(false);
+      }
+
       setMessage(data.message);
       setPlayerHands([data.playerHand]);
       setDealerHand(data.dealerHand);
-      setGameOver(false);
       setSplitOccurred(false);
       setActiveHandIndex(0);
       setBalance(data.balance);
@@ -113,6 +168,7 @@ function App() {
 
       setMessage(data.message);
       setGameOver(data.gameOver);
+
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.dealerHand) setDealerHand(data.dealerHand);
 
@@ -122,9 +178,32 @@ function App() {
     }
   };
 
+  /**
+   * Only allow Double if:
+   *  - The local hand total is 9, 10, or 11
+   *  - No Ace in that hand
+   *  - Enough balance to double
+   *  - Not game over, bet placed, etc.
+   */
+  const canDouble = () => {
+    if (!betPlaced || gameOver) return false;
+    // Check local player's active hand
+    const activeHand = playerHands[activeHandIndex] || [];
+    const total = getLocalHandValue(activeHand);
+
+    // Must be exactly 9,10, or 11
+    if (![9,10,11].includes(total)) return false;
+    // Must NOT have an Ace
+    if (localHandHasAce(activeHand)) return false;
+    // Must have enough balance to double
+    if (balance < currentBet) return false;
+
+    return true;
+  };
+
   const handleDouble = async () => {
-    if (balance < currentBet) {
-      alert('Not enough balance to double down.');
+    if (!canDouble()) {
+      alert('You cannot double at this time.');
       return;
     }
 
@@ -150,8 +229,8 @@ function App() {
     }
   };
 
-  // Condition to show Dealer/Player hands only after dealing
-  const showHands = betPlaced && !gameOver && playerHands[0].length > 0;
+  // If immediate Blackjack => hide the action buttons
+  const isBlackjackWin = message.includes('Blackjack! Player wins!');
 
   return (
     <div className="table-container">
@@ -172,7 +251,6 @@ function App() {
 
       {/* Lower message area - closer to chips */}
       <div className="message-display">
-        {/* “Place Your Bet” if no bet yet */}
         {!betPlaced && !gameOver && <h2>Place Your Bet</h2>}
         <p>{message}</p>
       </div>
@@ -236,17 +314,24 @@ function App() {
         </div>
       )}
 
-      {/* Action Buttons => Center-left, vertical gap, only if game not over and bet is placed */}
-      {!gameOver && betPlaced && (
+      {/* 
+        Action Buttons => 
+        Hide them if the game is over or immediate Blackjack
+      */}
+      {!gameOver && betPlaced && !isBlackjackWin && (
         <div className="action-buttons">
           <button className="common-button" onClick={handleHit}>Hit</button>
           <button className="common-button" onClick={handleStand}>Stand</button>
-          <button className="common-button" onClick={handleDouble}>Double</button>
+
+          {/* Only show Double if canDouble() is true */}
+          {canDouble() && (
+            <button className="common-button" onClick={handleDouble}>Double</button>
+          )}
         </div>
       )}
 
-      {/* New Round after game is over */}
-      {gameOver && (
+      {/* New Round after game is over or immediate blackjack */}
+      {(gameOver || isBlackjackWin) && (
         <button onClick={handleNewRound} className="common-button new-round-button">
           New Round
         </button>
@@ -255,7 +340,9 @@ function App() {
   );
 }
 
-// Format card image filenames
+/**
+ * getCardImage: Return image path for a given card
+ */
 function getCardImage(card) {
   if (card.rank === 'Hidden') {
     return '/src/assets/playing_cards/card_back.png';
@@ -278,3 +365,22 @@ function getCardImage(card) {
 }
 
 export default App;
+
+/**
+ * Test Cases for Currency & Splits (examples):
+ * 1) Bet 50, then Clear => Check that balance = 300 again, currentBet=0
+ * 2) Bet 50 again, then Deal => Check that balance=250 after dealing
+ * 3) If immediate Blackjack => confirm only "New Round" is visible, gameOver=true
+ * 4) Bet 25, then 25 => total 50, then Clear => balance back=300, bet=0
+ * 5) Bet 10, then Deal => if user hits or stands, ensure the final balance updates
+ * 6) Splitting scenario => if first 2 cards have same rank => "split" => bet doubles,
+ *    check final outcome for each split hand
+ */
+
+/**
+ * FILE: index.js
+ * 
+ * No changes needed for Double logic (9,10,11 rule),
+ * we handle it in the client by limiting the button. 
+ * The rest remains the same as your current code.
+ */

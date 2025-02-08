@@ -76,11 +76,11 @@ app.post('/start', (req, res) => {
     return res.status(400).json({ message: 'Bet must be greater than 0.' });
   }
 
-  // Create and shuffle
+  // Create and shuffle the deck
   let deck = createDeck();
   deck = shuffleDeck(deck);
 
-  // Deal
+  // Deal initial hands
   const playerHand = [deck.pop(), deck.pop()];
   const dealerHand = [deck.pop(), deck.pop()];
 
@@ -89,25 +89,25 @@ app.post('/start', (req, res) => {
   gameState.dealerHand = dealerHand;
   gameState.gameOver = false;
   gameState.bet = bet;
-  gameState.balance -= bet; // Subtract bet
+  gameState.balance -= bet; // subtract bet
   gameState.currentHandIndex = 0;
   gameState.splitOccurred = false;
 
-  // Check values
   const playerValue = calculateHandValue(playerHand);
   const dealerValue = calculateHandValue(dealerHand);
 
+  // Original message for dealer's visible card
   let message = `Dealer shows: ${dealerHand[0].rank} of ${dealerHand[0].suit}`;
 
-  // Immediate Blackjack?
+  // Check for immediate Blackjack
   if (checkForBlackjack(playerHand)) {
     const blackjackWin = Math.round(gameState.bet * 2.5);
     gameState.balance += blackjackWin;
     gameState.gameOver = true;
     message = 'Blackjack! Player wins!';
   } else {
-    // Hide actual playerValue to preserve ??? logic if desired
-    message = `Player: ???, ` + message;
+    // ✅ FIX: display the player's actual card total instead of "???"
+    message = `Player: ${playerValue}, ` + message;
   }
 
   gameState.message = message;
@@ -115,7 +115,7 @@ app.post('/start', (req, res) => {
   return res.json({
     message: gameState.message,
     playerHand,
-    dealerHand: [dealerHand[0], { suit: 'Hidden', rank: 'Hidden' }],
+    dealerHand: [dealerHand[0], { suit: 'Hidden', rank: 'Hidden' }], // hide dealer's second card
     balance: gameState.balance,
   });
 });
@@ -145,11 +145,9 @@ app.post('/hit', (req, res) => {
     });
   }
 
-  // Draw card
   const newCard = gameState.deck.pop();
   gameState.playerHands[handIndex].push(newCard);
 
-  // Check bust
   const playerValue = calculateHandValue(gameState.playerHands[handIndex]);
   if (playerValue > 21) {
     // If no split => "Player busts!"
@@ -207,7 +205,6 @@ app.post('/stand', (req, res) => {
     dealerValue = calculateHandValue(gameState.dealerHand);
   }
 
-  // Compare results
   let outcome = 'dealer-win';
   let finalMessage = '';
 
@@ -277,11 +274,9 @@ app.post('/double', (req, res) => {
     return res.json({ message: 'Insufficient balance to double down.' });
   }
 
-  // Double the bet
   gameState.balance -= gameState.bet;
   gameState.bet *= 2;
 
-  // Player draws 1 card
   const newCard = gameState.deck.pop();
   gameState.playerHands[handIndex].push(newCard);
 
@@ -303,7 +298,7 @@ app.post('/double', (req, res) => {
     });
   }
 
-  // If not busted, we effectively stand
+  // If not busted, effectively stand
   req.url = '/stand'; 
   req.method = 'POST';
   app._router.handle(req, res);
@@ -328,7 +323,6 @@ app.post('/split', (req, res) => {
     return res.json({ message: 'Insufficient balance to split.' });
   }
 
-  // Double the bet
   gameState.balance -= gameState.bet;
   gameState.bet *= 2;
 
@@ -348,7 +342,9 @@ app.post('/split', (req, res) => {
   });
 });
 
-// Optional: reset route
+/**
+ * Optional: reset route
+ */
 app.post('/reset', (req, res) => {
   gameState.deck = [];
   gameState.playerHands = [[]];
@@ -362,3 +358,14 @@ app.post('/reset', (req, res) => {
 
   return res.json({ message: 'Game reset.', balance: gameState.balance });
 });
+
+/** 
+ * Why the bug was happening:
+ * - The logic for the first round displayed "???": 
+ *     message = `Player: ???, Dealer shows: ...`
+ * - We replaced "???" with the correct playerValue:
+ *     message = `Player: ${playerValue}, Dealer shows: ...`
+ * 
+ * Now, the first round will correctly show 
+ * the player's total instead of "???".
+ */

@@ -13,7 +13,9 @@ body {
   width: 100vw;
   height: 100vh;
   position: relative;
-  background-color: #0b6e0b; /* green table background */
+  /* Remove the solid color, use your background image: */
+  background: url('/src/assets/background.png') no-repeat center center;
+  background-size: cover;  /* Make the image fill the container */
   overflow: hidden;
 }
 
@@ -79,14 +81,14 @@ body {
 /* Chips Row (bottom center) */
 .chips-row {
   position: absolute;
-  bottom: 120px;
+  bottom: 80px;
   width: 100%;
   text-align: center;
   z-index: 10;
 }
 .chip-image {
-  width: 60px;
-  height: 60px;
+  width: 90px;
+  height: 90px;
   margin: 0 5px;
   cursor: pointer;
 }
@@ -94,7 +96,7 @@ body {
 /* Bet Actions (Clear, Deal) - bottom center */
 .bet-actions {
   position: absolute;
-  bottom: 60px;
+  bottom: 40px;
   width: 100%;
   text-align: center;
   z-index: 10;
@@ -155,7 +157,7 @@ body {
 .new-round-button {
   position: absolute;
   left: 50%;
-  bottom: 10%;
+  bottom: 5%;
   transform: translateX(-50%);
   z-index: 15;
 }
