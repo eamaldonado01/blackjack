@@ -2,24 +2,20 @@
  * FILE: App.jsx
  * LOCATION: ~/Downloads/blackjack/client/src/App.jsx
  */
-
 import React, { useState } from 'react';
 import './styles.css';
 
-// A helper to calculate the local player's hand value
-// We'll use it to decide if Double is allowed (9,10,11 without an Ace)
+// Local helpers from your original code
 function getLocalHandValue(cards) {
-  // Minimal calculation for local reference
-  // This is separate from the server's official logic
   let total = 0;
   let aceCount = 0;
   for (let card of cards) {
-    if (card.rank === 'Hidden') continue; // ignore hidden card
+    if (card.rank === 'Hidden') continue;
     switch (card.rank) {
       case 'A':
       case 'Ace':
         aceCount += 1;
-        total += 1; // treat Ace as 1 initially
+        total += 1;
         break;
       case 'K':
       case 'King':
@@ -34,7 +30,6 @@ function getLocalHandValue(cards) {
         break;
     }
   }
-  // Convert Aces from 1 to 11 if it doesn't bust
   while (aceCount > 0) {
     if (total + 10 <= 21) {
       total += 10;
@@ -43,18 +38,16 @@ function getLocalHandValue(cards) {
   }
   return total;
 }
-
-// A helper to see if the local hand has an Ace
 function localHandHasAce(cards) {
-  for (let card of cards) {
-    if (card.rank === 'A' || card.rank === 'Ace') {
-      return true;
-    }
-  }
-  return false;
+  return cards.some((c) => c.rank === 'A' || c.rank === 'Ace');
 }
 
 function App() {
+  // Minimal single-player states
+  const [username, setUsername] = useState('');
+  const [joined, setJoined] = useState(false); // for demonstration
+  // If you want a single-player experience, set joined = true by default.
+
   const [message, setMessage] = useState('');
   const [playerHands, setPlayerHands] = useState([[]]);
   const [dealerHand, setDealerHand] = useState([]);
@@ -66,7 +59,6 @@ function App() {
   const [betPlaced, setBetPlaced] = useState(false);
   const [activeHandIndex, setActiveHandIndex] = useState(0);
 
-  // Chip Data
   const chipData = [
     { value: 5,   img: '/src/assets/chips/5.png' },
     { value: 10,  img: '/src/assets/chips/10.png' },
@@ -75,44 +67,49 @@ function App() {
     { value: 100, img: '/src/assets/chips/100.png' },
   ];
 
-  // ------------------- Betting Functions -------------------
+  // -- Demo: "username" flow for single player. Set joined to true if you want no prompt.
+  const handleJoin = () => {
+    if (!username) {
+      alert("Please enter a username to continue");
+      return;
+    }
+    setJoined(true); 
+  };
+
+  // Betting
   const handleAddChip = (chipValue) => {
     if (balance < chipValue) {
-      alert('Not enough balance to add this chip.');
+      alert('Not enough balance for this chip.');
       return;
     }
     setBalance((prev) => prev - chipValue);
     setCurrentBet((prev) => prev + chipValue);
   };
-
   const handleClearBet = () => {
     setBalance((prev) => prev + currentBet);
     setCurrentBet(0);
   };
 
-  // Start round => /start
+  // Start (Deal)
   const handlePlaceBet = async () => {
     if (currentBet <= 0) {
       alert('Please place a bet before starting.');
       return;
     }
     try {
-      const response = await fetch('http://127.0.0.1:3001/start', {
+      const resp = await fetch('http://127.0.0.1:3001/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bet: currentBet }),
       });
-      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+      if (!resp.ok) throw new Error(`HTTP error: ${resp.status}`);
+      const data = await resp.json();
 
-      const data = await response.json();
-
-      // If the server says "Blackjack! Player wins!"
       if (data.message.includes('Blackjack! Player wins!')) {
         setGameOver(true);
       } else {
         setGameOver(false);
       }
-
       setMessage(data.message);
       setPlayerHands([data.playerHand]);
       setDealerHand(data.dealerHand);
@@ -120,14 +117,13 @@ function App() {
       setActiveHandIndex(0);
       setBalance(data.balance);
 
-      // Round has begun
       setBetPlaced(true);
-    } catch (error) {
-      console.error('Error placing bet or starting:', error);
+    } catch (err) {
+      console.error("Error starting round:", err);
     }
   };
 
-  // New round => local state reset
+  // New Round
   const handleNewRound = () => {
     setMessage('');
     setPlayerHands([[]]);
@@ -139,107 +135,102 @@ function App() {
     setBetPlaced(false);
   };
 
-  // ------------------- Game Actions: Hit/Stand/Double -------------------
+  // Hit
   const handleHit = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:3001/hit', {
+      const resp = await fetch('http://127.0.0.1:3001/hit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handIndex: activeHandIndex }),
       });
-      const data = await response.json();
-
+      const data = await resp.json();
       setMessage(data.message);
       setGameOver(data.gameOver);
-      if (data.playerHands) {
-        setPlayerHands(data.playerHands);
-      }
-    } catch (error) {
-      console.error('Error hitting:', error);
+      if (data.playerHands) setPlayerHands(data.playerHands);
+    } catch (err) {
+      console.error("Error hitting:", err);
     }
   };
 
+  // Stand
   const handleStand = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:3001/stand', {
-        method: 'POST',
-      });
-      const data = await response.json();
-
+      const resp = await fetch('http://127.0.0.1:3001/stand', { method: 'POST' });
+      const data = await resp.json();
       setMessage(data.message);
       setGameOver(data.gameOver);
-
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.dealerHand) setDealerHand(data.dealerHand);
-
       setBalance(data.balance);
-    } catch (error) {
-      console.error('Error standing:', error);
+    } catch (err) {
+      console.error("Error standing:", err);
     }
   };
 
-  /**
-   * Only allow Double if:
-   *  - The local hand total is 9, 10, or 11
-   *  - No Ace in that hand
-   *  - Enough balance to double
-   *  - Not game over, bet placed, etc.
-   */
+  // Double
   const canDouble = () => {
     if (!betPlaced || gameOver) return false;
-    // Check local player's active hand
     const activeHand = playerHands[activeHandIndex] || [];
     const total = getLocalHandValue(activeHand);
-
-    // Must be exactly 9,10, or 11
-    if (![9,10,11].includes(total)) return false;
-    // Must NOT have an Ace
+    if (![9, 10, 11].includes(total)) return false;
     if (localHandHasAce(activeHand)) return false;
-    // Must have enough balance to double
     if (balance < currentBet) return false;
-
     return true;
   };
-
   const handleDouble = async () => {
     if (!canDouble()) {
       alert('You cannot double at this time.');
       return;
     }
-
-    setBalance((prev) => prev - currentBet);
-    setCurrentBet((prev) => prev * 2);
-
     try {
-      const response = await fetch('http://127.0.0.1:3001/double', {
+      setBalance((prev) => prev - currentBet);
+      setCurrentBet((prev) => prev * 2);
+
+      const resp = await fetch('http://127.0.0.1:3001/double', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handIndex: activeHandIndex }),
       });
-      const data = await response.json();
-
+      const data = await resp.json();
       setMessage(data.message);
       setGameOver(data.gameOver);
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.dealerHand) setDealerHand(data.dealerHand);
-
       setBalance(data.balance);
-    } catch (error) {
-      console.error('Error doubling:', error);
+    } catch (err) {
+      console.error("Error doubling:", err);
     }
   };
 
-  // If immediate Blackjack => hide the action buttons
+  // Hide action buttons if immediate Blackjack
   const isBlackjackWin = message.includes('Blackjack! Player wins!');
+
+  // Render
+  if (!joined) {
+    return (
+      <div className="table-container">
+        <div className="join-container">
+          <h2>Enter your username:</h2>
+          <input
+            type="text"
+            placeholder="Username..."
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <button className="common-button" onClick={handleJoin}>
+            Join
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="table-container">
-      {/* Large Title at the Top for the initial screen */}
       {!betPlaced && !gameOver && (
         <h1 className="title-banner">Blackjack</h1>
       )}
 
-      {/* Balance & Bet Buttons (top-right) */}
       <div className="balance-section">
         <button className="common-button" disabled>
           Balance: ${balance}
@@ -249,13 +240,11 @@ function App() {
         </button>
       </div>
 
-      {/* Lower message area - closer to chips */}
       <div className="message-display">
         {!betPlaced && !gameOver && <h2>Place Your Bet</h2>}
         <p>{message}</p>
       </div>
 
-      {/* Chips row if we haven't placed the bet */}
       {!betPlaced && !gameOver && (
         <div className="chips-row">
           {chipData.map((chip) => (
@@ -270,7 +259,6 @@ function App() {
         </div>
       )}
 
-      {/* Clear & Deal if bet > 0 and not placed */}
       {currentBet > 0 && !betPlaced && !gameOver && (
         <div className="bet-actions">
           <button className="common-button" onClick={handleClearBet}>Clear</button>
@@ -278,7 +266,6 @@ function App() {
         </div>
       )}
 
-      {/* Dealer’s Hand only after bet placed */}
       {betPlaced && (
         <div className="dealer-area">
           <h2>Dealer's Hand</h2>
@@ -295,7 +282,6 @@ function App() {
         </div>
       )}
 
-      {/* Player’s Hand only after bet placed */}
       {betPlaced && (
         <div className="player-area">
           <div className="player-hand-container">
@@ -314,23 +300,16 @@ function App() {
         </div>
       )}
 
-      {/* 
-        Action Buttons => 
-        Hide them if the game is over or immediate Blackjack
-      */}
       {!gameOver && betPlaced && !isBlackjackWin && (
         <div className="action-buttons">
           <button className="common-button" onClick={handleHit}>Hit</button>
           <button className="common-button" onClick={handleStand}>Stand</button>
-
-          {/* Only show Double if canDouble() is true */}
           {canDouble() && (
             <button className="common-button" onClick={handleDouble}>Double</button>
           )}
         </div>
       )}
 
-      {/* New Round after game is over or immediate blackjack */}
       {(gameOver || isBlackjackWin) && (
         <button onClick={handleNewRound} className="common-button new-round-button">
           New Round
@@ -340,9 +319,6 @@ function App() {
   );
 }
 
-/**
- * getCardImage: Return image path for a given card
- */
 function getCardImage(card) {
   if (card.rank === 'Hidden') {
     return '/src/assets/playing_cards/card_back.png';
@@ -365,22 +341,3 @@ function getCardImage(card) {
 }
 
 export default App;
-
-/**
- * Test Cases for Currency & Splits (examples):
- * 1) Bet 50, then Clear => Check that balance = 300 again, currentBet=0
- * 2) Bet 50 again, then Deal => Check that balance=250 after dealing
- * 3) If immediate Blackjack => confirm only "New Round" is visible, gameOver=true
- * 4) Bet 25, then 25 => total 50, then Clear => balance back=300, bet=0
- * 5) Bet 10, then Deal => if user hits or stands, ensure the final balance updates
- * 6) Splitting scenario => if first 2 cards have same rank => "split" => bet doubles,
- *    check final outcome for each split hand
- */
-
-/**
- * FILE: index.js
- * 
- * No changes needed for Double logic (9,10,11 rule),
- * we handle it in the client by limiting the button. 
- * The rest remains the same as your current code.
- */

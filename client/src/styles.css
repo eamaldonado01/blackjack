@@ -9,14 +9,34 @@ body {
   color: #fff;
 }
 
+/* The main container with background image */
 .table-container {
   width: 100vw;
   height: 100vh;
   position: relative;
-  /* Remove the solid color, use your background image: */
   background: url('/src/assets/background.png') no-repeat center center;
-  background-size: cover;  /* Make the image fill the container */
+  background-size: cover; /* ensures the image covers the screen */
   overflow: hidden;
+}
+
+/* Join container if not joined yet */
+.join-container {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.6);
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.join-container input {
+  padding: 8px;
+  margin-right: 10px;
+  border-radius: 4px;
+  border: none;
+  font-size: 1rem;
 }
 
 /* Title at the initial screen (Blackjack) */
@@ -29,10 +49,10 @@ body {
   z-index: 11;
 }
 
-/* Message Display - lower so it's closer to chips */
+/* Message Display */
 .message-display {
   position: absolute;
-  top: 60%; /* lowered from 40% to 60% */
+  top: 60%;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
@@ -50,7 +70,7 @@ body {
   z-index: 10;
 }
 
-/* Shared button style for cohesive look */
+/* Shared button style */
 .common-button {
   font-size: 1rem;
   background-color: rgba(0,0,0,0.5);
@@ -64,31 +84,17 @@ body {
   background-color: rgba(0,0,0,0.7);
 }
 
-/* The "Balance" & "Current Bet" are disabled but share style */
-.balance-button,
-.bet-button {
-  font-size: 1rem;
-  background-color: rgba(0,0,0,0.5);
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: none;
-  color: #fff;
-  cursor: default;
-  width: 150px;
-  text-align: center;
-}
-
 /* Chips Row (bottom center) */
 .chips-row {
   position: absolute;
-  bottom: 80px;
+  bottom: 100px; /* slightly adjusted */
   width: 100%;
   text-align: center;
   z-index: 10;
 }
 .chip-image {
-  width: 90px;
-  height: 90px;
+  width: 60px;
+  height: 60px;
   margin: 0 5px;
   cursor: pointer;
 }
@@ -108,7 +114,7 @@ body {
 /* Dealer Area */
 .dealer-area {
   position: absolute;
-  top: 10%; /* moved upward from 20% => leaves space for messages */
+  top: 15%;
   width: 100%;
   text-align: center;
   z-index: 1;
@@ -153,7 +159,7 @@ body {
   width: 120px;
 }
 
-/* New Round Button (same style, placed near bottom center) */
+/* New Round Button (placed near bottom center) */
 .new-round-button {
   position: absolute;
   left: 50%;
