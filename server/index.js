@@ -2,81 +2,118 @@
  * FILE: index.js
  * LOCATION: ~/Downloads/blackjack/server/index.js
  */
-
 const express = require('express');
 const cors = require('cors');
 const { createDeck, shuffleDeck, calculateHandValue } = require('./gameLogic');
-
-const http = require('http');   // For server
+const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
-// Create HTTP server & Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: "*" },
 });
 
 app.use(cors());
 app.use(express.json());
 
-// We'll store seats for a single table, up to 5 seats
-let seats = []; // array of { username, seatIndex }
-// username must be unique, seatIndex from 0 to 4
+// Keep track of seats
+let seats = [];
+let gameStarted = false;
+let currentTurnSeat = 0;
+
+function broadcastTableState() {
+  io.emit('tableState', {
+    players: seats.map(s => ({
+      username: s.username,
+      seatIndex: s.seatIndex,
+      isReady: s.isReady,
+      isTurn: s.isTurn,
+    })),
+    gameStarted,
+    currentTurnSeat,
+    message: gameStarted
+      ? `Game in progress. It's ${seats.find(s=>s.seatIndex===currentTurnSeat)?.username}'s turn`
+      : 'Waiting in the lobby...',
+  });
+}
 
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  // Player tries to join the table
-  socket.on('joinTable', (data, ack) => {
+  socket.on('joinTable', (data) => {
+    console.log('[Server] joinTable event received:', data);
     const { username } = data;
     if (!username) {
       socket.emit('joinError', 'Username is required');
       return;
     }
-    // Check if username is already taken
-    if (seats.find(p => p.username.toLowerCase() === username.toLowerCase())) {
+    if (seats.some(p => p.username.toLowerCase() === username.toLowerCase())) {
       socket.emit('joinError', 'Username is already taken');
       return;
     }
-    // Check if table is full
     if (seats.length >= 5) {
       socket.emit('joinError', 'Table is full (max 5 seats)');
       return;
     }
-    // Add the user
-    const seatIndex = seats.length; // next seat
-    seats.push({ username, seatIndex, socketID: socket.id });
-    
-    // Broadcast updated seat info
-    io.emit('tableState', { 
-      players: seats.map(({username, seatIndex}) => ({ username, seatIndex })),
-      message: `Welcome ${username} to seat ${seatIndex + 1}`
+
+    const seatIndex = seats.length;
+    seats.push({
+      username,
+      seatIndex,
+      socketID: socket.id,
+      isReady: false,
+      isTurn: false,
     });
-    // Let the joiner know they're successful
+
+    broadcastTableState();
+
     socket.emit('joinSuccess', {
-      players: seats.map(({username, seatIndex}) => ({ username, seatIndex })),
+      players: seats,
+      seatIndex,
+      gameStarted,
     });
+  });
+
+  socket.on('playerReady', () => {
+    const seat = seats.find(s => s.socketID === socket.id);
+    if (!seat) return;
+    seat.isReady = true;
+    broadcastTableState();
+  });
+
+  socket.on('startGame', () => {
+    const hostSeat = seats.find(s => s.seatIndex === 0);
+    if (!hostSeat || hostSeat.socketID !== socket.id) {
+      console.log('[Server] Non-host tried startGame or seat 0 not found');
+      return;
+    }
+    console.log('[Server] Host is starting the game...');
+    const allReady = seats.every(s => s.isReady);
+    if (!allReady) {
+      console.log('[Server] Not all players are ready, ignoring startGame');
+      return;
+    }
+    gameStarted = true;
+    currentTurnSeat = 0;
+    seats.forEach(s => s.isTurn = false);
+    if (seats[0]) seats[0].isTurn = true;
+    broadcastTableState();
   });
 
   socket.on('disconnect', () => {
+    seats = seats.filter(s => s.socketID !== socket.id);
+    if (seats.length === 0) {
+      gameStarted = false;
+      currentTurnSeat = 0;
+    }
+    broadcastTableState();
     console.log('Client disconnected:', socket.id);
-    // remove from seats
-    seats = seats.filter(p => p.socketID !== socket.id);
-    // broadcast update
-    io.emit('tableState', {
-      players: seats.map(({username, seatIndex}) => ({ username, seatIndex })),
-      message: 'A player left the table.'
-    });
   });
 });
 
-// Single-player game logic re-using your existing code
-// For demonstration, we keep them so your single-player approach still works:
+/** Single-player logic below unchanged */
 let gameState = {
   deck: [],
   playerHands: [[]],
@@ -99,14 +136,12 @@ function resetGameStateIfNeeded() {
     gameState.bet = 0;
     gameState.currentHandIndex = 0;
     gameState.splitOccurred = false;
-    // Keep balance
   }
 }
 function checkForBlackjack(hand) {
   return hand.length === 2 && calculateHandValue(hand) === 21;
 }
 
-// Reuse your existing routes
 const router = express.Router();
 
 router.post('/start', (req, res) => {
@@ -192,6 +227,7 @@ router.post('/stand', (req, res) => {
       balance: gameState.balance,
     });
   }
+
   let dealerValue = calculateHandValue(gameState.dealerHand);
   while (dealerValue < 17) {
     gameState.dealerHand.push(gameState.deck.pop());
@@ -263,8 +299,7 @@ router.post('/double', (req, res) => {
     });
   }
 
-  // If not busted, stand
-  req.url = '/stand'; 
+  req.url = '/stand';
   req.method = 'POST';
   app._router.handle(req, res);
 });
@@ -305,19 +340,6 @@ router.post('/split', (req, res) => {
 
 app.use('/', router);
 
-// Start the server with Socket.IO
 server.listen(PORT, () => {
   console.log(`Server + Socket.IO running on port ${PORT}`);
 });
-
-/**
- * Explanation:
- * 1) We added Socket.IO:
- *    const server = http.createServer(app);
- *    const io = new Server(server, { ... });
- * 2) We store up to 5 seats in an array 'seats'. Each seat is { username, seatIndex, socketID }.
- * 3) In 'joinTable' we ensure a unique username, limit seats to 5, broadcast seat info.
- * 4) The single-player endpoints (/start, /hit, /stand, etc.) remain for demonstration, 
- *    but in a true multi-user environment, you'd adapt them to handle multiple players 
- *    and seat logic. 
- */

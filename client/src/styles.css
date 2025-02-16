@@ -9,13 +9,12 @@ body {
   color: #fff;
 }
 
-/* The main container with background image */
 .table-container {
   width: 100vw;
   height: 100vh;
   position: relative;
   background: url('/src/assets/background.png') no-repeat center center;
-  background-size: cover; /* ensures the image covers the screen */
+  background-size: cover;
   overflow: hidden;
 }
 
@@ -47,6 +46,31 @@ body {
   transform: translateX(-50%);
   font-size: 3rem;
   z-index: 11;
+}
+
+/* Lobby players listing */
+.lobby-players {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 10px;
+  background-color: rgba(0,0,0,0.3);
+  border-radius: 6px;
+}
+
+.lobby-players ul {
+  list-style: none;
+  padding: 0;
+}
+
+/* Start Game button (host only) */
+.start-game-button {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* Message Display */
@@ -87,11 +111,12 @@ body {
 /* Chips Row (bottom center) */
 .chips-row {
   position: absolute;
-  bottom: 100px; /* slightly adjusted */
+  bottom: 100px;
   width: 100%;
   text-align: center;
   z-index: 10;
 }
+
 .chip-image {
   width: 60px;
   height: 60px;
@@ -130,6 +155,15 @@ body {
   width: 100%;
   text-align: center;
   z-index: 1;
+  display: flex;
+  flex-direction: row;
+  justify-content: center; /* center horizontally */
+}
+.player-hand-container {
+  background-color: rgba(0,0,0,0.3);
+  padding: 5px;
+  margin: 0 10px;
+  border-radius: 6px;
 }
 .player-hand-container h2 {
   margin-bottom: 5px;

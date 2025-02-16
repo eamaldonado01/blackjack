@@ -2,10 +2,18 @@
  * FILE: App.jsx
  * LOCATION: ~/Downloads/blackjack/client/src/App.jsx
  */
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client';
 import './styles.css';
 
-// Local helpers from your original code
+// IP of Computer 1
+const SERVER_IP = '169.233.252.85:3001';
+
+// If you'd like to see more logs, set to true
+const DEBUG = true;
+
+/** Helper: local compute for double-checking hands (demo only). */
 function getLocalHandValue(cards) {
   let total = 0;
   let aceCount = 0;
@@ -31,10 +39,8 @@ function getLocalHandValue(cards) {
     }
   }
   while (aceCount > 0) {
-    if (total + 10 <= 21) {
-      total += 10;
-    }
-    aceCount -= 1;
+    if (total + 10 <= 21) total += 10;
+    aceCount--;
   }
   return total;
 }
@@ -43,22 +49,32 @@ function localHandHasAce(cards) {
 }
 
 function App() {
-  // Minimal single-player states
-  const [username, setUsername] = useState('');
-  const [joined, setJoined] = useState(false); // for demonstration
-  // If you want a single-player experience, set joined = true by default.
+  /** ========== Socket & Connection States ========== */
+  const [socket, setSocket] = useState(null);
+  const [connected, setConnected] = useState(false); // track if socket connected
 
+  /** ========== Lobby States ========== */
+  const [username, setUsername] = useState('');
+  const [joined, setJoined] = useState(false);
+
+  // The array of players from server: { username, seatIndex, isReady, isTurn }
+  const [players, setPlayers] = useState([]);
+  const [mySeatIndex, setMySeatIndex] = useState(null);
+  const [host, setHost] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [currentTurnSeat, setCurrentTurnSeat] = useState(null);
+
+  /** ========== Single-Player-Like States ========== */
   const [message, setMessage] = useState('');
-  const [playerHands, setPlayerHands] = useState([[]]);
+  const [playerHands, setPlayerHands] = useState([[]]); 
   const [dealerHand, setDealerHand] = useState([]);
   const [gameOver, setGameOver] = useState(false);
-
   const [balance, setBalance] = useState(300);
   const [currentBet, setCurrentBet] = useState(0);
   const [splitOccurred, setSplitOccurred] = useState(false);
-  const [betPlaced, setBetPlaced] = useState(false);
-  const [activeHandIndex, setActiveHandIndex] = useState(0);
+  const [betPlaced, setBetPlaced] = useState(false); // did we do "Deal"?
 
+  // Chip data
   const chipData = [
     { value: 5,   img: '/src/assets/chips/5.png' },
     { value: 10,  img: '/src/assets/chips/10.png' },
@@ -67,145 +83,230 @@ function App() {
     { value: 100, img: '/src/assets/chips/100.png' },
   ];
 
-  // -- Demo: "username" flow for single player. Set joined to true if you want no prompt.
+  /** ========== Socket.io Setup ========== */
+  useEffect(() => {
+    if (DEBUG) console.log('[App.jsx] Attempting socket.io connection to:', SERVER_IP);
+    const newSocket = io(`http://${SERVER_IP}`, {
+      transports: ['websocket', 'polling'],
+    });
+
+    newSocket.on('connect', () => {
+      setConnected(true);
+      if (DEBUG) console.log('[App.jsx] Socket connected:', newSocket.id);
+    });
+    newSocket.on('connect_error', (err) => {
+      setConnected(false);
+      console.error('[App.jsx] connect_error:', err);
+    });
+    newSocket.on('disconnect', () => {
+      setConnected(false);
+      if (DEBUG) console.log('[App.jsx] Socket disconnected');
+    });
+
+    // Listen for tableState
+    newSocket.on('tableState', (data) => {
+      if (DEBUG) console.log('[App.jsx] tableState received:', data);
+      setPlayers(data.players || []);
+      setMessage(data.message || '');
+      setGameStarted(!!data.gameStarted);
+      if (typeof data.currentTurnSeat !== 'undefined') {
+        setCurrentTurnSeat(data.currentTurnSeat);
+      }
+      if (data.dealerHand) setDealerHand(data.dealerHand);
+    });
+
+    // joinSuccess => we store seatIndex, set joined
+    newSocket.on('joinSuccess', (data) => {
+      if (DEBUG) console.log('[App.jsx] joinSuccess:', data);
+      setPlayers(data.players || []);
+      setMySeatIndex(data.seatIndex);
+      setHost(data.seatIndex === 0);
+      setJoined(true);
+      setGameStarted(!!data.gameStarted);
+    });
+
+    newSocket.on('joinError', (errMsg) => {
+      alert(errMsg);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      if (DEBUG) console.log('[App.jsx] Cleanup: disconnect socket');
+      newSocket.disconnect();
+    };
+  }, []);
+
+  /** ========== Lobby & Join Logic ========== */
   const handleJoin = () => {
-    if (!username) {
-      alert("Please enter a username to continue");
+    if (DEBUG) console.log('[App.jsx] handleJoin fired, username=', username);
+    if (!socket) {
+      console.error('[App.jsx] socket not ready or failed to connect');
+      alert('Socket not ready. Is the server running?');
       return;
     }
-    setJoined(true); 
+    if (!connected) {
+      console.warn('[App.jsx] socket is not connected, cannot join');
+      alert('Not connected to server. Check IP or firewall.');
+      return;
+    }
+    if (!username) {
+      alert('Enter a username');
+      return;
+    }
+
+    // Emit the join event to server
+    socket.emit('joinTable', { username }, (ack) => {
+      if (DEBUG) console.log('[App.jsx] joinTable callback ack=', ack);
+    });
   };
 
-  // Betting
+  /** Mark self Ready on server */
+  function setReadyOnServer() {
+    if (!socket) return;
+    socket.emit('playerReady');
+  }
+
+  /** Host => startGame */
+  function handleHostStartGame() {
+    if (!socket || !host) return;
+    socket.emit('startGame');
+  }
+
+  /** ========== Betting & Single-Player Logic ========== */
   const handleAddChip = (chipValue) => {
     if (balance < chipValue) {
-      alert('Not enough balance for this chip.');
+      alert('Not enough balance to add this chip.');
       return;
     }
     setBalance((prev) => prev - chipValue);
     setCurrentBet((prev) => prev + chipValue);
   };
+
   const handleClearBet = () => {
     setBalance((prev) => prev + currentBet);
     setCurrentBet(0);
   };
 
-  // Start (Deal)
+  // Pressing "Deal" => single-player /start => also mark ourselves ready
   const handlePlaceBet = async () => {
     if (currentBet <= 0) {
       alert('Please place a bet before starting.');
       return;
     }
     try {
-      const resp = await fetch('http://127.0.0.1:3001/start', {
+      if (DEBUG) console.log('[App.jsx] handlePlaceBet => /start with bet=', currentBet);
+      const resp = await fetch(`http://${SERVER_IP}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bet: currentBet }),
       });
       if (!resp.ok) throw new Error(`HTTP error: ${resp.status}`);
-      const data = await resp.json();
 
-      if (data.message.includes('Blackjack! Player wins!')) {
+      const data = await resp.json();
+      if (DEBUG) console.log('[App.jsx] /start response:', data);
+      setMessage(data.message || '');
+      if ((data.message || '').includes('Blackjack! Player wins!')) {
         setGameOver(true);
       } else {
         setGameOver(false);
       }
-      setMessage(data.message);
-      setPlayerHands([data.playerHand]);
-      setDealerHand(data.dealerHand);
-      setSplitOccurred(false);
-      setActiveHandIndex(0);
-      setBalance(data.balance);
 
-      setBetPlaced(true);
+      setPlayerHands([data.playerHand || []]);
+      setDealerHand(data.dealerHand || []);
+      setSplitOccurred(false);
+      setBalance(data.balance || balance);
+
+      setBetPlaced(true); // local "Ready"
+      setReadyOnServer(); // inform server
     } catch (err) {
-      console.error("Error starting round:", err);
+      console.error('Error placing bet:', err);
     }
   };
 
-  // New Round
   const handleNewRound = () => {
+    if (DEBUG) console.log('[App.jsx] handleNewRound');
     setMessage('');
     setPlayerHands([[]]);
     setDealerHand([]);
     setGameOver(false);
     setCurrentBet(0);
     setSplitOccurred(false);
-    setActiveHandIndex(0);
     setBetPlaced(false);
   };
 
-  // Hit
   const handleHit = async () => {
+    if (DEBUG) console.log('[App.jsx] handleHit => /hit');
     try {
-      const resp = await fetch('http://127.0.0.1:3001/hit', {
+      const resp = await fetch(`http://${SERVER_IP}/hit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handIndex: activeHandIndex }),
+        body: JSON.stringify({ handIndex: 0 }),
       });
       const data = await resp.json();
-      setMessage(data.message);
-      setGameOver(data.gameOver);
+      if (DEBUG) console.log('[App.jsx] /hit response:', data);
+      setMessage(data.message || '');
+      setGameOver(data.gameOver || false);
       if (data.playerHands) setPlayerHands(data.playerHands);
     } catch (err) {
-      console.error("Error hitting:", err);
+      console.error('Error hitting:', err);
     }
   };
-
-  // Stand
   const handleStand = async () => {
+    if (DEBUG) console.log('[App.jsx] handleStand => /stand');
     try {
-      const resp = await fetch('http://127.0.0.1:3001/stand', { method: 'POST' });
+      const resp = await fetch(`http://${SERVER_IP}/stand`, { method: 'POST' });
       const data = await resp.json();
-      setMessage(data.message);
-      setGameOver(data.gameOver);
+      if (DEBUG) console.log('[App.jsx] /stand response:', data);
+      setMessage(data.message || '');
+      setGameOver(data.gameOver || false);
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.dealerHand) setDealerHand(data.dealerHand);
-      setBalance(data.balance);
+      setBalance(data.balance || balance);
     } catch (err) {
-      console.error("Error standing:", err);
+      console.error('Error standing:', err);
     }
   };
 
-  // Double
   const canDouble = () => {
-    if (!betPlaced || gameOver) return false;
-    const activeHand = playerHands[activeHandIndex] || [];
-    const total = getLocalHandValue(activeHand);
+    if (!gameStarted || gameOver) return false;
+    const total = getLocalHandValue(playerHands[0]);
     if (![9, 10, 11].includes(total)) return false;
-    if (localHandHasAce(activeHand)) return false;
+    if (localHandHasAce(playerHands[0])) return false;
     if (balance < currentBet) return false;
     return true;
   };
   const handleDouble = async () => {
+    if (DEBUG) console.log('[App.jsx] handleDouble => /double');
     if (!canDouble()) {
-      alert('You cannot double at this time.');
+      alert('Cannot double right now');
       return;
     }
     try {
       setBalance((prev) => prev - currentBet);
       setCurrentBet((prev) => prev * 2);
 
-      const resp = await fetch('http://127.0.0.1:3001/double', {
+      const resp = await fetch(`http://${SERVER_IP}/double`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handIndex: activeHandIndex }),
+        body: JSON.stringify({ handIndex: 0 }),
       });
       const data = await resp.json();
-      setMessage(data.message);
-      setGameOver(data.gameOver);
+      if (DEBUG) console.log('[App.jsx] /double response:', data);
+      setMessage(data.message || '');
+      setGameOver(data.gameOver || false);
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.dealerHand) setDealerHand(data.dealerHand);
-      setBalance(data.balance);
+      setBalance(data.balance || balance);
     } catch (err) {
-      console.error("Error doubling:", err);
+      console.error('Error doubling:', err);
     }
   };
 
-  // Hide action buttons if immediate Blackjack
+  const isMyTurn = (currentTurnSeat === mySeatIndex) && gameStarted && !gameOver;
   const isBlackjackWin = message.includes('Blackjack! Player wins!');
 
-  // Render
+  /** 1) Username screen if not joined */
   if (!joined) {
     return (
       <div className="table-container">
@@ -217,90 +318,149 @@ function App() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-          <button className="common-button" onClick={handleJoin}>
+          {/* Use type="button" to avoid form submission */}
+          <button type="button" className="common-button" onClick={handleJoin}>
             Join
           </button>
+
+          {/* Show debug info if desired */}
+          {!connected && (
+            <p style={{ color: 'red', marginTop: '10px' }}>
+              Not connected to server. Is the server running at {SERVER_IP}?
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="table-container">
-      {!betPlaced && !gameOver && (
-        <h1 className="title-banner">Blackjack</h1>
-      )}
+  /** 2) If game not started => show LOBBY / LOADING SCREEN */
+  if (!gameStarted && !gameOver) {
+    const allReady = players.length > 0 && players.every((p) => p.isReady);
+    // If there's only 1 player => can start if that one is ready
+    // If a second player joins => only start if all are ready
+    const canHostStart = host && (
+      (players.length === 1 && players[0].isReady) 
+      || (players.length > 1 && allReady)
+    );
 
-      <div className="balance-section">
-        <button className="common-button" disabled>
-          Balance: ${balance}
-        </button>
-        <button className="common-button" disabled>
-          Current Bet: ${currentBet}
-        </button>
-      </div>
+    return (
+      <div className="table-container">
+        <h1 className="title-banner">Blackjack Lobby</h1>
 
-      <div className="message-display">
-        {!betPlaced && !gameOver && <h2>Place Your Bet</h2>}
-        <p>{message}</p>
-      </div>
-
-      {!betPlaced && !gameOver && (
-        <div className="chips-row">
-          {chipData.map((chip) => (
-            <img
-              key={chip.value}
-              src={chip.img}
-              alt={`$${chip.value} chip`}
-              className="chip-image"
-              onClick={() => handleAddChip(chip.value)}
-            />
-          ))}
+        <div className="balance-section">
+          <button className="common-button" disabled>Balance: ${balance}</button>
+          <button className="common-button" disabled>Current Bet: ${currentBet}</button>
         </div>
-      )}
 
-      {currentBet > 0 && !betPlaced && !gameOver && (
-        <div className="bet-actions">
-          <button className="common-button" onClick={handleClearBet}>Clear</button>
-          <button className="common-button" onClick={handlePlaceBet}>Deal</button>
-        </div>
-      )}
-
-      {betPlaced && (
-        <div className="dealer-area">
-          <h2>Dealer's Hand</h2>
-          <div className="hand-display">
-            {dealerHand.map((card, index) => (
-              <img
-                key={index}
-                src={getCardImage(card)}
-                alt={`${card.rank} of ${card.suit}`}
-                className="card-image"
-              />
+        <div className="lobby-players">
+          <h2>Players in Lobby:</h2>
+          <ul>
+            {players.map((p) => (
+              <li key={p.seatIndex}>
+                {p.username} {p.isReady ? '(Ready)' : '(Not Ready)'}
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
-      )}
 
-      {betPlaced && (
-        <div className="player-area">
-          <div className="player-hand-container">
-            <h2>Player's Hand</h2>
-            <div className="hand-display">
-              {playerHands[0].map((card, cIndex) => (
+        <div className="message-display">
+          <p>{message}</p>
+        </div>
+
+        {!players.find(p => p.seatIndex === mySeatIndex)?.isReady && (
+          <>
+            <div className="chips-row">
+              {chipData.map((chip) => (
                 <img
-                  key={cIndex}
-                  src={getCardImage(card)}
-                  alt={`${card.rank} of ${card.suit}`}
-                  className="card-image"
+                  key={chip.value}
+                  src={chip.img}
+                  alt={`$${chip.value} chip`}
+                  className="chip-image"
+                  onClick={() => handleAddChip(chip.value)}
                 />
               ))}
             </div>
-          </div>
-        </div>
-      )}
+            {currentBet > 0 && (
+              <div className="bet-actions">
+                <button className="common-button" onClick={handleClearBet}>Clear</button>
+                <button className="common-button" onClick={handlePlaceBet}>Deal (Ready)</button>
+              </div>
+            )}
+          </>
+        )}
 
-      {!gameOver && betPlaced && !isBlackjackWin && (
+        {canHostStart && (
+          <button className="common-button start-game-button" onClick={handleHostStartGame}>
+            Start Game
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /** 3) Actual GAME SCREEN if gameStarted = true */
+  return (
+    <div className="table-container">
+      <div className="balance-section">
+        <button className="common-button" disabled>Balance: ${balance}</button>
+        <button className="common-button" disabled>Current Bet: ${currentBet}</button>
+      </div>
+
+      <div className="message-display">
+        <p>{message}</p>
+        {currentTurnSeat !== null && (
+          <h2>It's {players.find(p => p.seatIndex === currentTurnSeat)?.username}'s turn</h2>
+        )}
+      </div>
+
+      <div className="dealer-area">
+        <h2>Dealer's Hand</h2>
+        <div className="hand-display">
+          {dealerHand.map((card, index) => (
+            <img
+              key={index}
+              src={getCardImage(card)}
+              alt={`${card.rank} of ${card.suit}`}
+              className="card-image"
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Display seats reversed => seat 0 far right, seat N far left */}
+      <div className="player-area">
+        {[...players].reverse().map((p) => (
+          <div 
+            key={p.seatIndex} 
+            className="player-hand-container seat-block"
+          >
+            <h2>
+              {p.username} {p.seatIndex === mySeatIndex && '(You)'}
+              {p.seatIndex === currentTurnSeat && ' (Turn)'}
+            </h2>
+            {/* For demonstration, we only show actual cards for myself using local single-player approach */}
+            {p.seatIndex === mySeatIndex ? (
+              <div className="hand-display">
+                {playerHands[0].map((card, cIndex) => (
+                  <img
+                    key={cIndex}
+                    src={getCardImage(card)}
+                    alt={`${card.rank} of ${card.suit}`}
+                    className="card-image"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: '#ccc' }}>
+                Cards hidden or not implemented for other seats
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {isMyTurn && !gameOver && (
         <div className="action-buttons">
           <button className="common-button" onClick={handleHit}>Hit</button>
           <button className="common-button" onClick={handleStand}>Stand</button>
@@ -319,6 +479,7 @@ function App() {
   );
 }
 
+/** Helper to get correct card image */
 function getCardImage(card) {
   if (card.rank === 'Hidden') {
     return '/src/assets/playing_cards/card_back.png';
@@ -336,7 +497,6 @@ function getCardImage(card) {
   };
   const rankStr = rankMap[card.rank] || card.rank;
   const suitStr = suitMap[card.suit] || card.suit.toLowerCase();
-
   return `/src/assets/playing_cards/${rankStr}_of_${suitStr}.png`;
 }
 
