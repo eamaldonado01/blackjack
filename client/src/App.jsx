@@ -8,7 +8,7 @@ import io from 'socket.io-client';
 import './styles.css';
 
 // IP of Computer 1
-const SERVER_IP = '169.233.252.85:3001';
+const SERVER_IP = '192.168.86.220:3001';
 
 // If you'd like to see more logs, set to true
 const DEBUG = true;
@@ -87,7 +87,8 @@ function App() {
   useEffect(() => {
     if (DEBUG) console.log('[App.jsx] Attempting socket.io connection to:', SERVER_IP);
     const newSocket = io(`http://${SERVER_IP}`, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],  // Force WebSocket
+      reconnectionAttempts: 3,
     });
 
     newSocket.on('connect', () => {

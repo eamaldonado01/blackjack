@@ -340,6 +340,6 @@ router.post('/split', (req, res) => {
 
 app.use('/', router);
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {  // Bind to all interfaces
   console.log(`Server + Socket.IO running on port ${PORT}`);
 });
