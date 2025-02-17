@@ -51,7 +51,7 @@ body {
 /* Lobby players listing */
 .lobby-players {
   position: absolute;
-  top: 20%;
+  top: 30%;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
@@ -68,12 +68,12 @@ body {
 /* Start Game button (host only) */
 .start-game-button {
   position: absolute;
-  top: 35%;
+  top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
 }
 
-/* Message Display */
+/* Message Display (used in Lobby) */
 .message-display {
   position: absolute;
   top: 60%;
@@ -136,10 +136,10 @@ body {
   margin: 0 10px;
 }
 
-/* Dealer Area */
+/* Dealer Area - moved up to avoid overlap */
 .dealer-area {
   position: absolute;
-  top: 15%;
+  top: 5%;
   width: 100%;
   text-align: center;
   z-index: 1;
@@ -148,7 +148,34 @@ body {
   margin-bottom: 5px;
 }
 
-/* Player Area */
+/* Dealer message just below the dealer's area */
+.dealer-message {
+  position: absolute;
+  top: 30%;
+  width: 100%;
+  text-align: center;
+  z-index: 2;
+}
+
+/* Turn message in the center below dealer message */
+.turn-message {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  text-align: center;
+  z-index: 2;
+}
+
+/* Player message below the turn message */
+.player-message {
+  position: absolute;
+  top: 25%;
+  width: 100%;
+  text-align: center;
+  z-index: 2;
+}
+
+/* Player Area near bottom */
 .player-area {
   position: absolute;
   bottom: 10%;

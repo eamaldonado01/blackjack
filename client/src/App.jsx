@@ -46,8 +46,11 @@ export default function App() {
   /** Multi-player game states from server */
   const [playerHandsBySeat, setPlayerHandsBySeat] = useState({}); 
   const [dealerHand, setDealerHand] = useState([]);
-  const [message, setMessage] = useState('');
   const [gameOver, setGameOver] = useState(false);
+
+  // We now separate out messages to display them in different places
+  const [dealerMessage, setDealerMessage] = useState('');
+  const [playerMessage, setPlayerMessage] = useState('');
 
   /** Single-player style states for bets/balance */
   const [balance, setBalance] = useState(300);
@@ -63,6 +66,10 @@ export default function App() {
     { value: 50,  img: '/src/assets/chips/50.png' },
     { value: 100, img: '/src/assets/chips/100.png' },
   ];
+
+  // This will store final results after a round ends,
+  // e.g. { 0: "Bust", 1: "Won", etc. } if the server provides it.
+  const [playerStatuses, setPlayerStatuses] = useState({});
 
   /** ========== Socket Setup ========== */
   useEffect(() => {
@@ -88,7 +95,22 @@ export default function App() {
     newSocket.on('tableState', (data) => {
       if (DEBUG) console.log('[App] tableState =>', data);
       setPlayers(data.players || []);
-      setMessage(data.message || '');
+
+      // We won't store everything in one 'message' now; but if needed:
+      const incomingMsg = data.message || '';
+
+      // Adjust if "Round ended. All players have taken their turn." => "Round ended"
+      let modMsg = incomingMsg.replace(
+        'Round ended. All players have taken their turn.',
+        'Round ended'
+      );
+
+      // If the server uses a slightly different text for the "all players done" part:
+      modMsg = modMsg.replace('All players have taken their turn.', 'Round ended');
+
+      // We'll store that modded text in the playerMessage if there's no explicit separation
+      setPlayerMessage(modMsg);
+
       setGameStarted(!!data.gameStarted);
       setCurrentTurnSeat(data.currentTurnSeat ?? null);
     });
@@ -96,10 +118,37 @@ export default function App() {
     // multiBlackjack event => full game data
     newSocket.on('multiBlackjackUpdate', (data) => {
       if (DEBUG) console.log('[App] multiBlackjackUpdate =>', data);
+
       setPlayerHandsBySeat(data.playerHandsBySeat || {});
       setDealerHand(data.dealerHand || []);
       setGameOver(!!data.gameOver);
-      setMessage(data.message || '');
+
+      // If the server sends per-player statuses (Bust/Won/Lost/etc.), store them
+      if (data.playerStatuses) {
+        setPlayerStatuses(data.playerStatuses);
+      }
+
+      // We'll break out the combined message into dealer/player messages if possible
+      let incomingMsg = data.message || '';
+
+      // Adjust if "Round ended. All players have taken their turn." => "Round ended"
+      incomingMsg = incomingMsg.replace(
+        'Round ended. All players have taken their turn.',
+        'Round ended'
+      );
+      incomingMsg = incomingMsg.replace('All players have taken their turn.', 'Round ended');
+
+      // Example split: if it contains "Dealer shows:"
+      let dMsg = '';
+      let pMsg = incomingMsg;
+      const dealerIndex = incomingMsg.indexOf('Dealer shows:');
+      if (dealerIndex !== -1) {
+        dMsg = incomingMsg.substring(dealerIndex).trim();
+        pMsg = incomingMsg.substring(0, dealerIndex).trim();
+      }
+
+      setDealerMessage(dMsg);
+      setPlayerMessage(pMsg);
     });
 
     // joinSuccess => seatIndex, gameStarted
@@ -121,6 +170,7 @@ export default function App() {
       if (DEBUG) console.log('[App] cleanup');
       newSocket.disconnect();
     };
+    // eslint-disable-next-line
   }, []);
 
   /** ========== Lobby Logic ========== */
@@ -185,7 +235,18 @@ export default function App() {
       } else {
         setGameOver(false);
       }
-      setMessage(data.message || '');
+
+      // We store the messages in our new states
+      let dMsg = '';
+      let pMsg = data.message || '';
+      const dealerIndex = pMsg.indexOf('Dealer shows:');
+      if (dealerIndex !== -1) {
+        dMsg = pMsg.substring(dealerIndex).trim();
+        pMsg = pMsg.substring(0, dealerIndex).trim();
+      }
+      setDealerMessage(dMsg);
+      setPlayerMessage(pMsg);
+
       // Because this is single-player logic, we store *our* hand in playerHandsBySeat
       setPlayerHandsBySeat(seatsObj => ({
         ...seatsObj,
@@ -216,15 +277,17 @@ export default function App() {
         method: 'POST',
       });
       const data = await resp.json();
-      console.log('[App] /resetRound =>', data);
+      if (DEBUG) console.log('[App] /resetRound =>', data);
       // Locally reset
-      setMessage('');
+      setDealerMessage('');
+      setPlayerMessage('');
       setBetPlaced(false);
       setGameOver(false);
       setSplitOccurred(false);
       setCurrentBet(0);
       setDealerHand([]);
       setPlayerHandsBySeat({});
+      setPlayerStatuses({});
       // The server will also broadcast gameStarted=false => we'll re-render the lobby
     } catch (err) {
       console.error('Error handleNewRound => /resetRound:', err);
@@ -233,15 +296,12 @@ export default function App() {
 
   /**
    * Multi-seat HIT
-   * For multi-seat logic, we call /hit with seatIndex.
-   * For single-player, we still call the same route, but let the server handle it.
    */
   async function handleHit() {
     try {
       const resp = await fetch(`http://${SERVER_IP}/hit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Provide seatIndex for multi-seat logic
         body: JSON.stringify({ seatIndex: mySeatIndex, handIndex: 0 }),
       });
       const data = await resp.json();
@@ -251,10 +311,18 @@ export default function App() {
         return;
       }
 
-      setMessage(data.message || '');
+      let dMsg = '';
+      let pMsg = data.message || '';
+      const dealerIndex = pMsg.indexOf('Dealer shows:');
+      if (dealerIndex !== -1) {
+        dMsg = pMsg.substring(dealerIndex).trim();
+        pMsg = pMsg.substring(0, dealerIndex).trim();
+      }
+      setDealerMessage(dMsg);
+      setPlayerMessage(pMsg);
+
       setGameOver(data.gameOver || false);
 
-      // If single-player updated info comes back, update local
       if (data.playerHands) {
         setPlayerHandsBySeat(ps => ({
           ...ps,
@@ -281,7 +349,6 @@ export default function App() {
       const resp = await fetch(`http://${SERVER_IP}/stand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Provide seatIndex for multi-seat logic
         body: JSON.stringify({ seatIndex: mySeatIndex }),
       });
       const data = await resp.json();
@@ -291,10 +358,18 @@ export default function App() {
         return;
       }
 
-      setMessage(data.message || '');
+      let dMsg = '';
+      let pMsg = data.message || '';
+      const dealerIndex = pMsg.indexOf('Dealer shows:');
+      if (dealerIndex !== -1) {
+        dMsg = pMsg.substring(dealerIndex).trim();
+        pMsg = pMsg.substring(0, dealerIndex).trim();
+      }
+      setDealerMessage(dMsg);
+      setPlayerMessage(pMsg);
+
       setGameOver(data.gameOver || false);
 
-      // If single-player updated info
       if (data.playerHands) {
         setPlayerHandsBySeat(ps => ({
           ...ps,
@@ -312,23 +387,35 @@ export default function App() {
     }
   }
 
+  // Logic to see if we can double down
   function canDouble() {
     if (!gameStarted || gameOver) return false;
     // Only for single-player approach
     const myCards = playerHandsBySeat[mySeatIndex] || [];
     // local check
-    let total = 0; let aceCount=0;
+    let total = 0; 
+    let aceCount = 0;
     myCards.forEach((card) => {
-      if (!card || card.rank==='Hidden') return;
+      if (!card || card.rank === 'Hidden') return;
       switch (card.rank) {
-        case 'A': case 'Ace': aceCount++; total+=1; break;
+        case 'A': case 'Ace': 
+          aceCount++; 
+          total += 1; 
+          break;
         case 'K': case 'King':
         case 'Q': case 'Queen':
-        case 'J': case 'Jack': total+=10; break;
-        default: total += Number(card.rank) || 0; break;
+        case 'J': case 'Jack': 
+          total += 10; 
+          break;
+        default: 
+          total += Number(card.rank) || 0; 
+          break;
       }
     });
-    while (aceCount>0 && total+10<=21) { total+=10; aceCount--; }
+    while (aceCount > 0 && total + 10 <= 21) {
+      total += 10; 
+      aceCount--;
+    }
     if (![9,10,11].includes(total)) return false;
     if (balance < currentBet) return false;
     return true;
@@ -338,14 +425,24 @@ export default function App() {
     if (!canDouble()) return;
     try {
       setBalance(b => b - currentBet);
-      setCurrentBet(b => b*2);
+      setCurrentBet(b => b * 2);
       const resp = await fetch(`http://${SERVER_IP}/double`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handIndex: 0 }),
       });
       const data = await resp.json();
-      setMessage(data.message || '');
+
+      let dMsg = '';
+      let pMsg = data.message || '';
+      const dealerIndex = pMsg.indexOf('Dealer shows:');
+      if (dealerIndex !== -1) {
+        dMsg = pMsg.substring(dealerIndex).trim();
+        pMsg = pMsg.substring(0, dealerIndex).trim();
+      }
+      setDealerMessage(dMsg);
+      setPlayerMessage(pMsg);
+
       setGameOver(data.gameOver||false);
 
       if (data.playerHands) {
@@ -361,11 +458,9 @@ export default function App() {
     }
   }
 
-  // It's my turn if I'm the currentTurnSeat in a multi game,
-  // or if single-player game is in progress and not over (we reuse the same flag).
+  // Determine if it's my turn: in multi-seat, I'm currentTurnSeat
+  // If the game is not over, it's my turn => can show Hit/Stand, etc.
   const isMyTurn = (currentTurnSeat === mySeatIndex) && gameStarted && !gameOver;
-
-  // ====== Renders ======
 
   // 1) Join screen
   if (!joined) {
@@ -398,12 +493,12 @@ export default function App() {
     // Only seatIndex=0 is the host.
     const canHostStart = host && (
       (players.length === 1 && players[0].isReady)
-      || (players.length>1 && allReady)
+      || (players.length > 1 && allReady)
     );
 
     return (
       <div className="table-container">
-        <h1 className="title-banner">Blackjack Lobby</h1>
+        <h1 className="title-banner">Blackjack</h1>
         <div className="balance-section">
           <button className="common-button" disabled>Balance: ${balance}</button>
           <button className="common-button" disabled>Current Bet: ${currentBet}</button>
@@ -415,14 +510,14 @@ export default function App() {
             {players.map((p) => (
               <li key={p.seatIndex}>
                 {p.username} {p.isReady ? '(Ready)' : '(Not Ready)'}
-                {p.seatIndex===0 && ' [Host]'}
+                {p.seatIndex === 0 && ' [Host]'}
               </li>
             ))}
           </ul>
         </div>
 
         <div className="message-display">
-          <p>{message}</p>
+          <p>{playerMessage}</p>
         </div>
 
         {/* If I'm not ready => show bet UI */}
@@ -439,7 +534,7 @@ export default function App() {
                 />
               ))}
             </div>
-            {currentBet>0 && (
+            {currentBet > 0 && (
               <div className="bet-actions">
                 <button className="common-button" onClick={handleClearBet}>Clear</button>
                 <button className="common-button" onClick={handlePlaceBet}>Deal (Ready)</button>
@@ -461,43 +556,79 @@ export default function App() {
   // 3) Actual Game
   return (
     <div className="table-container">
+      {/* Balance/Bet display */}
       <div className="balance-section">
         <button className="common-button" disabled>Balance: ${balance}</button>
         <button className="common-button" disabled>Current Bet: ${currentBet}</button>
       </div>
 
-      <div className="message-display">
-        <p>{message}</p>
-        {currentTurnSeat !== null && (
-          <h2>It's {players.find(p=>p.seatIndex===currentTurnSeat)?.username}'s turn</h2>
-        )}
-      </div>
-
-      {/* Dealer */}
+      {/* Dealer's Hand at the top */}
       <div className="dealer-area">
         <h2>Dealer's Hand</h2>
         <div className="hand-display">
-          {dealerHand.map((card, idx)=>(
-            <img
-              key={idx}
-              src={getCardImage(card)}
-              alt={`${card.rank} of ${card.suit}`}
-              className="card-image"
-            />
-          ))}
+          {/* Hide the dealer's second card until gameOver (traditional style) */}
+          {dealerHand.map((card, idx) => {
+            const displayCard = { ...card };
+            if (idx === 1 && !gameOver) {
+              // If round not over, keep second card hidden
+              displayCard.rank = 'Hidden';
+            }
+            return (
+              <img
+                key={idx}
+                src={getCardImage(displayCard)}
+                alt={`${card.rank} of ${card.suit}`}
+                className="card-image"
+              />
+            );
+          })}
         </div>
       </div>
 
-      {/* Players (reverse order so that seat 0 is on the right, seat 1 on the left, etc.) */}
+      {/* Dealer message (e.g. "Dealer shows: ...") */}
+      <div className="dealer-message">
+        <p>{dealerMessage}</p>
+      </div>
+
+      {/* Turn message in the center:
+          If it's my turn => "It's your turn"
+          Otherwise => "It's (username)'s turn"
+      */}
+      <div className="turn-message">
+        {currentTurnSeat !== null && !gameOver && (
+          <h2>
+            {currentTurnSeat === mySeatIndex
+              ? "It's your turn"
+              : `It's ${players.find(p=>p.seatIndex===currentTurnSeat)?.username}'s turn`
+            }
+          </h2>
+        )}
+        {/* If the round ended, we might show that text here, or rely on the playerMessage */}
+        {gameOver && <h2>Round ended</h2>}
+      </div>
+
+      {/* The game state message for the current player (ex: "username hits and now has...") */}
+      <div className="player-message">
+        <p>{playerMessage}</p>
+      </div>
+
+      {/* Players' hands at the bottom */}
       <div className="player-area">
         {[...players].reverse().map((p)=> {
           const seatCards = playerHandsBySeat[p.seatIndex] || [];
+          // If round is over, append result if we have any
+          let resultText = '';
+          if (gameOver && playerStatuses[p.seatIndex]) {
+            resultText = ` (${playerStatuses[p.seatIndex]})`;
+          }
+
           return (
             <div className="player-hand-container seat-block" key={p.seatIndex}>
               <h2>
-                {p.username}{' '}
-                {p.seatIndex===mySeatIndex && '(You)'}
-                {p.seatIndex===currentTurnSeat && ' (Turn)'}
+                {p.username}
+                {p.seatIndex===mySeatIndex && ' (You)'}
+                {/* We remove the old " (Turn)" so it does NOT say that in the player box */}
+                {resultText}
               </h2>
               <div className="hand-display">
                 {seatCards.map((card, cIndex)=>(
@@ -525,7 +656,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Only host should see "New Round" when the game is over */}
+      {/* Only host sees "New Round" if the game is over */}
       {host && gameOver && (
         <button onClick={handleNewRound} className="common-button new-round-button">
           New Round
