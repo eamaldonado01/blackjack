@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import './styles.css';
 
-const SERVER_IP = '192.168.86.220:3001';
+/** Instead of a hard-coded IP, we detect the hostname + port dynamically. */
+const SERVER_PORT = 3001;                  
+const host = window.location.hostname;     
+const SERVER_IP = `${host}:${SERVER_PORT}`; 
 const DEBUG = true;
 
 // Helper to load card images
@@ -106,13 +109,14 @@ export default function App() {
   const [splitOccurred, setSplitOccurred] = useState(false);
   const [betPlaced, setBetPlaced] = useState(false);
 
-  // Round-end statuses, e.g. {0:'Won',1:'Bust'}
+  // Round-end statuses
   const [playerStatuses, setPlayerStatuses] = useState({});
 
   // ===== Socket setup =====
   useEffect(() => {
     if (DEBUG) console.log('[App] connecting to', SERVER_IP);
 
+    // Connect using the dynamic SERVER_IP
     const newSocket = io(`http://${SERVER_IP}`, {
       transports: ['websocket'],
       reconnectionAttempts: 3,
@@ -157,7 +161,7 @@ export default function App() {
       if (data.balance !== undefined) setBalance(data.balance);
       if (data.gameOver) setCurrentBet(0);
 
-      // [CHANGED] => Only update dealerMessage if "Dealer shows:" is present
+      // Only update dealerMessage if "Dealer shows:" is present
       let incomingMsg = data.message || '';
       incomingMsg = incomingMsg.replace(
         'Round ended. All players have taken their turn.',
@@ -180,7 +184,7 @@ export default function App() {
       setGameStarted(data.gameStarted);
     });
 
-    // joinError
+    // joinError => alert
     newSocket.on('joinError', (errMsg) => {
       alert(errMsg);
     });
@@ -260,7 +264,7 @@ export default function App() {
 
       let inMsg = data.message || '';
       const idx = inMsg.indexOf('Dealer shows:');
-      let dMsg = dealerMessage; // [CHANGED]
+      let dMsg = dealerMessage; 
       let pMsg = inMsg;
 
       if (idx !== -1) {
@@ -321,7 +325,6 @@ export default function App() {
 
       setGameOver(data.gameOver || false);
 
-      // [CHANGED] Preserve old dealerMessage if no "Dealer shows:"
       let [dMsg, pMsg] = parseMessagesAndPreserveDealer(dealerMessage, data.message || '');
       setDealerMessage(dMsg);
       setPlayerMessage(pMsg);
@@ -355,7 +358,6 @@ export default function App() {
 
       setGameOver(data.gameOver || false);
 
-      // [CHANGED]
       let [dMsg, pMsg] = parseMessagesAndPreserveDealer(dealerMessage, data.message || '');
       setDealerMessage(dMsg);
       setPlayerMessage(pMsg);
@@ -401,7 +403,6 @@ export default function App() {
 
       setGameOver(data.gameOver || false);
 
-      // [CHANGED]
       let [dMsg, pMsg] = parseMessagesAndPreserveDealer(dealerMessage, data.message || '');
       setDealerMessage(dMsg);
       setPlayerMessage(pMsg);
@@ -524,7 +525,7 @@ export default function App() {
   // 3) Actual Game
   return (
     <div className="table-container">
-      {/* Dealer area - Moved dealer message INSIDE this block */}
+      {/* Dealer area */}
       <div className="dealer-area">
         <h2>Dealer's Hand</h2>
         <div className="hand-display">
@@ -544,7 +545,6 @@ export default function App() {
           })}
         </div>
 
-        {/* [CHANGED] The dealer message is now inside the .dealer-area */}
         <div className="dealer-message" style={{ marginTop: '10px' }}>
           <p>{dealerMessage}</p>
         </div>
@@ -592,8 +592,6 @@ export default function App() {
             resultText = ` (${playerStatuses[p.seatIndex]})`;
           }
 
-          // Show total if it's the player's turn
-          // (You can adjust this logic as needed.)
           let displayName = p.username;
           if (p.seatIndex === mySeatIndex) displayName += ' (You)';
           const total = calculateHandTotal(seatCards);
