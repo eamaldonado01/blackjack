@@ -41,36 +41,66 @@ let multiGame = {
   message: '',
 };
 
-/** Broadcast seats, turn info, plus optionally partial game info. */
-function broadcastTableState() {
-  io.emit('tableState', {
-    players: seats.map(s => ({
+function broadcastTableState(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  io.to(lobbyId).emit('tableState', {
+    players: lobby.seats.map(s => ({
       username: s.username,
       seatIndex: s.seatIndex,
       isReady: s.isReady,
       isTurn: s.isTurn,
+      balance: s.balance,
     })),
-    gameStarted,
-    currentTurnSeat,
-    message: gameStarted
-      ? `Game in progress. It's ${seats.find(s=>s.seatIndex===currentTurnSeat)?.username}'s turn`
-      : 'Waiting in the lobby...',
+    gameStarted: lobby.gameStarted,
+    currentTurnSeat: lobby.currentTurnSeat,
   });
 }
 
-/** Broadcast the full multiBlackjack game state (so clients can see each other’s hands). */
-function broadcastMultiBlackjack() {
-  io.emit('multiBlackjackUpdate', {
-    dealerHand: multiGame.dealerHand,
-    playerHandsBySeat: multiGame.playerHandsBySeat,
-    gameOver: multiGame.gameOver,
-    message: multiGame.message,
+function broadcastMultiBlackjack(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  io.to(lobbyId).emit('multiBlackjackUpdate', {
+    dealerHand: lobby.multiGame.dealerHand,
+    playerHandsBySeat: lobby.multiGame.playerHandsBySeat,
+    gameOver: lobby.multiGame.gameOver,
+    message: lobby.multiGame.message,
   });
 }
+
 
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
+
+  socket.on('createLobby', ({ username }) => {
+    const lobbyId = generateUniqueLobbyId();  // you need a helper that makes a unique ID (like shortid or uuid)
+    
+    lobbies[lobbyId] = {
+      seats: [],
+      gameStarted: false,
+      multiGame: {
+        deck: [],
+        dealerHand: [],
+        playerHandsBySeat: {},
+        gameOver: false,
+        message: '',
+      },
+      currentTurnSeat: 0,
+    };
+  
+    lobbies[lobbyId].seats.push({
+      username,
+      seatIndex: 0,
+      socketID: socket.id,
+      isReady: false,
+      isTurn: false,
+      balance: 300,  // optional: track balance per player
+    });
+  
+    socket.join(lobbyId);
+    socket.emit('lobbyCreated', { lobbyId, players: lobbies[lobbyId].seats });
+    console.log(`[Server] Lobby ${lobbyId} created by ${username}`);
+  });
+  
   // NEW: Handle joining socket.io room by lobbyId
   socket.on('joinRoom', (lobbyId, callback) => {
     console.log(`Socket ${socket.id} joining room: ${lobbyId}`);
@@ -95,7 +125,36 @@ io.on('connection', (socket) => {
     if (callback) callback();
   });
   
-
+  socket.on('joinLobby', ({ username, lobbyId }) => {
+    const lobby = lobbies[lobbyId];
+    
+    if (!lobby) {
+      socket.emit('joinError', 'Lobby does not exist');
+      return;
+    }
+  
+    if (lobby.seats.some(p => p.username.toLowerCase() === username.toLowerCase())) {
+      socket.emit('joinError', 'Username is already taken in this lobby');
+      return;
+    }
+  
+    const seatIndex = Math.max(0, ...lobby.seats.map(s => s.seatIndex)) + 1;
+  
+    lobby.seats.push({
+      username,
+      seatIndex,
+      socketID: socket.id,
+      isReady: false,
+      isTurn: false,
+      balance: 300,  // optional
+    });
+  
+    socket.join(lobbyId);
+    socket.emit('joinSuccess', { lobbyId, players: lobby.seats });
+    io.to(lobbyId).emit('updatePlayers', lobby.seats);
+    console.log(`[Server] ${username} joined lobby ${lobbyId}`);
+  });
+  
   socket.on('joinTable', (data) => {
     console.log('[Server] joinTable event received:', data);
     const { username } = data;

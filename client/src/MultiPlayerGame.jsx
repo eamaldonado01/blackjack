@@ -84,13 +84,12 @@ function parseMessagesAndPreserveDealer(oldDealerMessage, incomingMessage) {
   return [newDealerMsg, newPlayerMsg];
 }
 
-export default function MultiPlayerGame(props) {
+export default function MultiPlayerGame({ onBack, username }) {
 // Socket
 const [socket, setSocket] = useState(null);
 const [connected, setConnected] = useState(false);
 
 // Lobby states
-const [username, setUsername] = useState('');
 const [joined, setJoined] = useState(false);
 const [players, setPlayers] = useState([]);
 const [mySeatIndex, setMySeatIndex] = useState(null);
@@ -128,6 +127,16 @@ useEffect(() => {
 
   newSocket.on('connect', () => {
     setConnected(true);
+    if (lobbyAction === 'create') {
+        newSocket.emit('createLobby', { username });
+      } else if (lobbyAction === 'join') {
+        if (lobbyId && lobbyId.trim() !== '') {
+          newSocket.emit('joinLobby', { username, lobbyId });
+        } else {
+          console.warn('No lobbyId provided for join');
+        }
+      }
+      
     if (DEBUG) console.log('[App] socket connected:', newSocket.id);
   });
   newSocket.on('connect_error', (err) => {
@@ -209,21 +218,7 @@ useEffect(() => {
 }, [gameOver]);
 
 // ===== Lobby logic =====
-function handleJoin() {
-  if (!socket) {
-    alert('Socket not connected');
-    return;
-  }
-  if (!connected) {
-    alert('Not connected to server');
-    return;
-  }
-  if (!username) {
-    alert('Please enter a username');
-    return;
-  }
-  socket.emit('joinTable', { username });
-}
+
 
 function setReadyOnServer() {
   if (!socket) return;
@@ -432,47 +427,7 @@ const isMyTurn = currentTurnSeat === mySeatIndex && gameStarted && !gameOver;
 
 // ====== RENDER ======
 
-// 1) Join screen
-if (!joined) {
-  return (
-    <div className="table-container">
-      <div className="join-container">
-        <h2>Enter your username:</h2>
-        <input
-          type="text"
-          placeholder="Username..."
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        {/* Only show the lobby manager once username is set */}
-        {username && (
-          <LobbyManager
-            username={username}
-            onLobbyJoined={(lobbyId) => {
-              if (socket) {
-                socket.emit('joinRoom', lobbyId, () => {
-                  console.log('Confirmed joined room on server');
-                  setJoined(true);
-                });
-              } else {
-                console.warn('Socket not connected yet');
-              }
-            }}
-          />
-        )}
-
-        {!connected && (
-          <p style={{ color: 'red', marginTop: '10px' }}>
-            Not connected to server at {SERVER_IP}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-// 2) Lobby
+// 1) Lobby
 if (!gameStarted && !gameOver) {
   const allReady = players.length > 0 && players.every((s) => s.isReady);
   const canHostStart = host && (
@@ -544,7 +499,7 @@ if (!gameStarted && !gameOver) {
   );
 }
 
-// 3) Actual Game
+// 2) Actual Game
 return (
   <div className="table-container">
     {/* Dealer area */}
@@ -599,10 +554,17 @@ return (
       </button>
 
       {host && gameOver && (
-        <button className="common-button new-round-button" onClick={handleNewRound}>
-          New Round
-        </button>
-      )}
+  balance > 0 ? (
+    <button className="common-button new-round-button" onClick={handleNewRound}>
+      New Round
+    </button>
+  ) : (
+    <div>
+      <h2>Game Over! You ran out of money.</h2>
+      <button className="common-button" onClick={onBack}>Back to Menu</button>
+    </div>
+  )
+)}
     </div>
 
     {/* Players */}

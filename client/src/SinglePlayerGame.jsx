@@ -28,7 +28,7 @@ function calculateHandTotal(cards = []) {
   return total;
 }
 
-export default function SinglePlayerGame({ onBack }) {
+export default function SinglePlayerGame({ onBack, username }) {
   // basic state
   const [balance, setBalance] = useState(300);
   const [currentBet, setCurrentBet] = useState(0);
@@ -36,6 +36,8 @@ export default function SinglePlayerGame({ onBack }) {
   const [dealerHand, setDealerHand] = useState([]);
   const [message, setMessage] = useState('');
   const [gameOver, setGameOver] = useState(false);
+
+  
 
   const chipValues = [5, 10, 25, 50, 100];
 
@@ -51,8 +53,14 @@ export default function SinglePlayerGame({ onBack }) {
 
   async function startRound() {
     if (currentBet <= 0) return alert('Place a bet first');
+  
+    // Always reset server state before starting a new game
+    await fetch(`http://${SERVER_IP}/resetRound`, { method: 'POST' });
+  
     const resp = await fetch(`http://${SERVER_IP}/start`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bet: currentBet })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bet: currentBet })
     });
     const data = await resp.json();
     setPlayerHand(data.playerHand);
@@ -61,6 +69,7 @@ export default function SinglePlayerGame({ onBack }) {
     setMessage(data.message);
     setGameOver(data.message.includes('Blackjack'));
   }
+  
 
   async function hit() {
     if (gameOver) return;
@@ -127,7 +136,25 @@ export default function SinglePlayerGame({ onBack }) {
         </div>
       )}
 
-      {gameOver && <button className="common-button" onClick={()=>window.location.reload()}>New Game</button>}
+    {gameOver && (
+    balance > 0 ? (
+     <button className="common-button" onClick={() => {
+      setPlayerHand([]);
+      setDealerHand([]);
+      setCurrentBet(0);
+      setMessage('');
+      setGameOver(false);
+        }}>
+        New Round
+        </button>
+    ) : (
+        <div>
+        <h2>Game Over! You ran out of money.</h2>
+         <button className="common-button" onClick={onBack}>Back to Menu</button>
+        </div>
+    )
+    )}
+
     </div>
   );
 }
