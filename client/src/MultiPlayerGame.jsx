@@ -7,81 +7,49 @@ import chip50  from './assets/chips/50.png';
 import chip100 from './assets/chips/100.png';
 
 export default function MultiPlayerGame({
-  onBack, username, balance, bet, dealerHand, playerHand,
-  dealerMessage, playerMessage, canDouble, showActions,
-  handleHit, handleStand, handleDouble, handleClearBet,
-  handleDeal, handleAddChipBet, handleNewRound,
-  gameOver, roundFinished, lobbyJoined, isMyTurn
+  onBack, uid,
+  lobbyData, lobbyId, gameState,
+  allReady, hostStartGame,
+  balance, bet,
+  handleAddChipBet, handleClearBet, handleDeal,
+  handleHit, handleStand,
 }) {
   const chipImages = {5:chip5,10:chip10,25:chip25,50:chip50,100:chip100};
-  const playing    = playerHand.length > 0;
 
-  /* dealer total shown */
-  let dealerTotal = 0;
-  if (playing){
-    dealerTotal = roundFinished
-      ? calculateHandValue(dealerHand)
-      : calculateHandValue([dealerHand[0]]);
+    /* --------------- loading ----------------------------------------- */
+  if (!lobbyData) {
+    return (
+      <div className="table-container">
+        <h2 className="turn-message">Connecting to lobby…</h2>
+      </div>
+    );
   }
 
-  return (
-    <div className="table-container">
+  /* --------------- WAITING ROOM ------------------------------------ */
+  if (!gameState) {
+    return (
+      <div className="table-container">
+        <button className="common-button back-button" onClick={onBack}>Menu</button>
+        <h1 className="title-banner">Blackjack – Multiplayer</h1>
 
-      {/* NAV */}
-      <button className="common-button back-button" onClick={onBack}>Menu</button>
-      {roundFinished && !gameOver && (
-        <button className="common-button new-round-button" onClick={handleNewRound}>
-          New Round
-        </button>
-      )}
-      <h1 className="title-banner">Blackjack – Multiplayer</h1>
-
-      {/* LOBBY WAITING ----------------------------------------- */}
-      {!lobbyJoined && <p className="turn-message">Waiting in lobby…</p>}
-
-      {/* BALANCE / BET ----------------------------------------- */}
-      <div className="balance-section">
-        <div>Balance: ${balance}</div>
-        <div>Current Bet: ${bet}</div>
-      </div>
-
-      {/* DEALER ------------------------------------------------- */}
-      {playing &&
-        <div className="dealer-area">
-          <h2>Dealer – {dealerTotal}</h2>
-          <div className="hand-display">
-            {dealerHand.map((c,i)=>(
-              <img key={i}
-                   src={ roundFinished || i===0 ? getCardImage(c) : getCardImage(null)}
-                   className="card-image"
-                   alt={`Dealer card ${i}`} />
-            ))}
-          </div>
+        <div className="turn-message">
+          Lobby ID:&nbsp;<strong>{lobbyId}</strong>
         </div>
-      }
 
-      {/* PLAYER ------------------------------------------------- */}
-      {playing &&
-        <div className="player-area">
-          <div className="hand-display">
-            {playerHand.map((c,i)=>(
-              <img key={i} src={getCardImage(c)} className="card-image" alt={`Player card ${i}`} />
-            ))}
-          </div>
-          <h2>{username} – {calculateHandValue(playerHand)}</h2>
-        </div>
-      }
+        <ul className="player-list">
+          {(lobbyData.players ?? []).map(p=>(
+            <li key={p}>
+              {p === lobbyData.host && '👑 '}
+              {lobbyData.usernames[p]} —&nbsp;
+              <span style={{color:lobbyData.ready[p]?'#0f0':'#f44'}}>
+                {lobbyData.ready?.[p] ? 'Ready' : 'Not ready'}
+              </span>
+            </li>
+          ))}
+        </ul>
 
-      {/* ACTION CONTROLS --------------------------------------- */}
-      {lobbyJoined && !roundFinished && !gameOver && (
-        showActions ? (
-          <div className="action-buttons">
-            <button className="common-button" onClick={handleHit}>Hit</button>
-            <button className="common-button" onClick={handleStand}>Stand</button>
-            {canDouble && <button className="common-button" onClick={handleDouble}>Double</button>}
-          </div>
-        ) : (
-          !playing && /* betting‑only before first deal */
+        {/* betting controls for players who haven't pressed Deal yet */}
+        {!lobbyData.ready?.[uid] && (
           <>
             <div className="bet-actions">
               <button className="common-button" onClick={handleClearBet}>Clear Bet</button>
@@ -94,19 +62,68 @@ export default function MultiPlayerGame({
               ))}
             </div>
           </>
-        )
-      )}
+        )}
 
-      {/* MESSAGES (end‑of‑round etc.) */}
-      {playerMessage && <p className="player-message">{playerMessage}</p>}
+        {uid === lobbyData.host && allReady &&
+          <button className="common-button host-start-btn" onClick={hostStartGame}>
+            Start Game
+          </button>}
+      </div>
+    );
+  }
 
-      {/* GAME‑OVER --------------------------------------------- */}
-      {gameOver &&
-        <div className="game-over">
-          <h2>Game Over!</h2>
-          <button className="common-button" onClick={onBack}>Back to Menu</button>
+  /* --------------- ACTIVE GAME ------------------------------------- */
+  const dealerHand  = gameState.dealerHand;
+  const myIdx       = lobbyData.players.indexOf(uid);
+  const isMyTurn    = gameState.currentIdx === myIdx;
+
+  /* create ordered player blocks (right → left) */
+  const blocks = [...lobbyData.players].reverse().map(pid=>{
+    const hand = gameState.hands[pid];
+    return (
+      <div className="mp-player-area" key={pid}>
+        <div className="hand-display">
+          {hand.map((c,i)=>
+            <img key={i} src={getCardImage(c)} className="card-image" alt="card"/>
+          )}
         </div>
-      }
+        <h3>
+          {lobbyData.usernames[pid]}
+          {gameState.currentIdx === lobbyData.players.indexOf(pid) && ' ←'}
+          &nbsp;– {calculateHandValue(hand)}
+        </h3>
+        {gameState.outcome[pid] && <p>{gameState.outcome[pid]}</p>}
+      </div>
+    );
+  });
+
+  return (
+    <div className="table-container">
+      <button className="common-button back-button" onClick={onBack}>Menu</button>
+      <h1 className="title-banner">Blackjack – Multiplayer</h1>
+
+      {/* dealer */}
+      <div className="dealer-area">
+        <h2>Dealer</h2>
+        <div className="hand-display">
+          {dealerHand.map((c,i)=>
+            <img key={i} src={getCardImage(c)} className="card-image" alt="card"/>
+          )}
+        </div>
+      </div>
+
+      {/* players row */}
+      <div className="mp-players-row">
+        {blocks}
+      </div>
+
+      {/* action buttons if it's my turn */}
+      {isMyTurn && (
+        <div className="action-buttons">
+          <button className="common-button" onClick={handleHit}>Hit</button>
+          <button className="common-button" onClick={handleStand}>Stand</button>
+        </div>
+      )}
     </div>
   );
 }

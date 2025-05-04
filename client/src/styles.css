@@ -6,6 +6,19 @@ body{
   color:#fff;
 }
 
+/* --- MULTIPLAYER DISPLAY LIST ------------------------------------------------------- */
+.player-list{list-style:none;padding:0;text-align:center;margin-top:80px}
+.player-list li{font-size:1.4rem;margin:8px 0}
+
+.host-start-btn{margin-top:40px}
+
+.mp-players-row{
+  position:absolute;bottom:14%;left:50%;transform:translateX(-50%);
+  display:flex;gap:60px;max-width:90%;justify-content:center;
+}
+.mp-player-area{display:flex;flex-direction:column;align-items:center;width:220px}
+
+
 /* --- USERNAME / MENU PANELS ------------------------------------ */
 .join-container{
   position:absolute;
@@ -41,8 +54,8 @@ body{
 
 /* --- TITLE ------------------------------------------------------ */
 .title-banner{
-  position:absolute;top:5%;left:50%;transform:translateX(-50%);
-  font-size:3rem;white-space:nowrap;
+  position:absolute;top:2%;left:50%;transform:translateX(-50%);
+  font-size:4rem;white-space:nowrap;
   z-index:10;
 }
 
@@ -51,6 +64,7 @@ body{
   font-size:1.4rem;
   position:absolute;top:20px;right:20px;
   display:flex;flex-direction:column;gap:8px;z-index:10;
+  top:20%;
 }
 .balance-section div{
   background:rgba(0,0,0,.5);
@@ -64,8 +78,8 @@ body{
   font-size:1.3rem;
   z-index:10;
 }
-.back-button   { top:30%; }   /* same vertical axis as action buttons‑10% */
-.new-round-button{ top:38%; } /* a bit below so they never overlap        */
+.back-button   { top:20%; }   /* same vertical axis as action buttons‑10% */
+.new-round-button{ top:28%; } /* a bit below so they never overlap        */
 
 /* --- DEALER / PLAYER AREAS ------------------------------------- */
 .dealer-area{
