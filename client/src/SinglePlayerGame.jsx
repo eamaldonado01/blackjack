@@ -1,9 +1,9 @@
 import React from 'react';
 import { getCardImage, calculateHandValue } from './utils/GameHelpers';
-import chip5 from './assets/chips/5.png';
-import chip10 from './assets/chips/10.png';
-import chip25 from './assets/chips/25.png';
-import chip50 from './assets/chips/50.png';
+import chip5   from './assets/chips/5.png';
+import chip10  from './assets/chips/10.png';
+import chip25  from './assets/chips/25.png';
+import chip50  from './assets/chips/50.png';
 import chip100 from './assets/chips/100.png';
 
 export default function SinglePlayerGame({
@@ -13,70 +13,97 @@ export default function SinglePlayerGame({
   handleDeal, handleAddChipBet, handleNewRound,
   gameOver, roundFinished
 }) {
-  const chipImages = { 5: chip5, 10: chip10, 25: chip25, 50: chip50, 100: chip100 };
+  const chipImages = {5:chip5,10:chip10,25:chip25,50:chip50,100:chip100};
+  const playing   = playerHand.length > 0;
+
+  /* visible dealer total: only up‑card while round active */
+  let dealerTotal = 0;
+  if (playing){
+    dealerTotal = roundFinished
+      ? calculateHandValue(dealerHand)
+      : calculateHandValue([dealerHand[0]]);
+  }
 
   return (
     <div className="table-container">
-      <button className="common-button back-button" onClick={onBack}>↩ Menu</button>
+
+      {/* nav */}
+      <button className="common-button back-button" onClick={onBack}>Menu</button>
+      {roundFinished && !gameOver && (
+        <button className="common-button new-round-button" onClick={handleNewRound}>
+          New Round
+        </button>
+      )}
+
       <h1 className="title-banner">Blackjack – Single Player</h1>
 
+      {/* balance bubble */}
       <div className="balance-section">
         <div>Balance: ${balance}</div>
         <div>Current Bet: ${bet}</div>
       </div>
 
-      <div className="dealer-area">
-        <h2>Dealer</h2>
-        <div className="hand-display">
-          {dealerHand.map((c, i) => (
-            <img key={i} src={getCardImage(c)} className="card-image" alt={`Dealer card ${i}`} />
-          ))}
+      {/* dealer */}
+      {playing &&
+        <div className="dealer-area">
+          <h2>Dealer – {dealerTotal}</h2>
+          <div className="hand-display">
+            {dealerHand.map((c,i)=>(
+              <img key={i}
+                   src={ roundFinished || i===0 ? getCardImage(c) : getCardImage(null)}
+                   className="card-image"
+                   alt={`Dealer card ${i}`} />
+            ))}
+          </div>
         </div>
-        <p className="dealer-message">{dealerMessage}</p>
-      </div>
+      }
 
-      <div className="player-area">
-        <h2>{username} – Total {calculateHandValue(playerHand)}</h2>
-        <div className="hand-display">
-          {playerHand.map((c, i) => (
-            <img key={i} src={getCardImage(c)} className="card-image" alt={`Player card ${i}`} />
-          ))}
+      {/* player */}
+      {playing &&
+        <div className="player-area">
+          <div className="hand-display">
+            {playerHand.map((c,i)=>(
+              <img key={i}
+                   src={getCardImage(c)}
+                   className="card-image"
+                   alt={`Player card ${i}`} />
+            ))}
+          </div>
+          <h2>{username} – {calculateHandValue(playerHand)}</h2>
         </div>
-        <p className="player-message">{playerMessage}</p>
-      </div>
+      }
 
+      {/* end‑of‑round or bust/win messages */}
+      {playerMessage && <p className="player-message">{playerMessage}</p>}
+
+      {/* controls */}
       {gameOver ? (
         <div className="game-over">
           <h2>Game Over!</h2>
           <button className="common-button" onClick={onBack}>Back to Menu</button>
         </div>
-      ) : roundFinished ? (
-        <button className="common-button new-round-button" onClick={handleNewRound}>New Round</button>
-      ) : showActions ? (
-        <div className="action-buttons">
-          <button className="common-button" onClick={handleHit}>Hit</button>
-          <button className="common-button" onClick={handleStand}>Stand</button>
-          {canDouble && <button className="common-button" onClick={handleDouble}>Double</button>}
-        </div>
+      ) : playing ? (
+        showActions && !roundFinished && (
+          <div className="action-buttons">
+            <button className="common-button" onClick={handleHit}>Hit</button>
+            <button className="common-button" onClick={handleStand}>Stand</button>
+            {canDouble && <button className="common-button" onClick={handleDouble}>Double</button>}
+          </div>
+        )
       ) : (
-        <div className="bet-actions">
-          <button className="common-button" onClick={handleClearBet}>Clear Bet</button>
-          <button className="common-button" onClick={handleDeal}>Deal</button>
-        </div>
-      )}
-
-      {!showActions && !roundFinished && (
-        <div className="chips-row">
-          {[5, 10, 25, 50, 100].map((value) => (
-            <img
-              key={value}
-              src={chipImages[value]}
-              className="chip-image"
-              onClick={() => handleAddChipBet(value)}
-              alt={`$${value} chip`}
-            />
-          ))}
-        </div>
+        /* betting screen */
+        <>
+          <div className="bet-actions">
+            <button className="common-button" onClick={handleClearBet}>Clear Bet</button>
+            <button className="common-button" onClick={handleDeal}>Deal</button>
+          </div>
+          <div className="chips-row">
+            {[5,10,25,50,100].map(v=>(
+              <img key={v} src={chipImages[v]} className="chip-image"
+                   onClick={()=>handleAddChipBet(v)} alt={`$${v} chip`} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -1,264 +1,125 @@
-/* Reverting to an absolutely-positioned background and elements,
-   with vertical spacing + wrapping to reduce overlap */
+/* --- BASE ------------------------------------------------------- */
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#2c2c2c;
+  color:#fff;
+}
 
-   body {
-    margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-    background-color: #2c2c2c;
-    color: #fff;
-  }
-  
-  /* Fill entire screen with background, allow vertical scrolling if needed */
-  .table-container {
-    width: 100vw;
-    height: 100vh;
-    position: relative;
-    background: url('/src/assets/background.png') no-repeat center center;
-    background-size: cover;
-    overflow: auto; /* So we can scroll if containers get large on zoom */
-  }
-  
-  /* JOIN SCREEN (center) */
-  .join-container {
-    position: absolute;
-    top: 40%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 20px;
-    border-radius: 8px;
-    width: 300px;
-  }
-  
-  
-  .join-container input {
-    padding: 8px;
-    margin-right: 10px;
-    border-radius: 4px;
-    border: none;
-    font-size: 1rem;
-  }
-  
-  /* Title */
-  .title-banner {
-    position: absolute;
-    top: 5%;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 3rem;
-    z-index: 10;
-    max-width: 90%;
-    text-align: center;
-    word-wrap: break-word;
-  }
-  
-  /* Lobby players listing */
-  .lobby-players {
-    position: absolute;
-    top: 20%;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    padding: 10px;
-    background-color: rgba(0,0,0,0.3);
-    border-radius: 6px;
-    max-width: 300px; 
-    width: 80%;
-    word-wrap: break-word;
-    z-index: 10;
-  }
-  
-  .lobby-players ul {
-    list-style: none;
-    padding: 0;
-  }
-  
-  /* Start game button (host only) */
-  .start-game-button {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10;
-  }
-  
-  /* Message display in Lobby */
-  .message-display {
-    position: absolute;
-    top: 40%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    z-index: 10;
-    max-width: 80%;
-    word-wrap: break-word;
-  }
-  
-  /* Balance & Bet Buttons (top-right).
-     Now we also place the new-round-button here if gameOver. */
-  .balance-section {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 10;
-  }
-  
-  /* Shared button style */
-  .common-button {
-    font-size: 1rem;
-    background-color: rgba(0,0,0,0.5);
-    padding: 10px 14px;
-    border-radius: 8px;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-  }
-  .common-button:hover {
-    background-color: rgba(0,0,0,0.7);
-  }
-  
-  /* Chips Row (lobby) */
-  .chips-row {
-    position: absolute;
-    bottom: 40px;
-    width: 100%;
-    text-align: center;
-    z-index: 10;
-  }
-  .chip-image {
-    width: 100px;
-    height: 100px;
-    margin: 0 5px;
-    cursor: pointer;
-  }
-  
-  /* Bet Actions (Clear, Deal) - bottom center in lobby */
-  .bet-actions {
-    position: absolute;
-    bottom: 200px;
-    width: 100%;
-    text-align: center;
-    z-index: 10;
-  }
-  .bet-actions button {
-    margin: 0 10px;
-  }
-  
-  /* =========== GAME SCREEN =========== */
-  
-  /* Dealer area up top */
-  .dealer-area {
-    position: absolute;
-    top: 0%;
-    width: 100%;
-    text-align: center;
-    z-index: 1;
-    max-width: 90%;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  .dealer-area h2 {
-    margin-bottom: 5px;
-  }
-  
-  /* Dealer message, further down */
-  .dealer-message {
-    position: absolute;
-    top: 85%;
-    width: 100%;
-    text-align: center;
-    z-index: 2;
-    max-width: 90%;
-    left: 50%;
-    transform: translateX(-50%);
-    word-wrap: break-word;
-  }
-  
-  /* Turn message */
-  .turn-message {
-    position: absolute;
-    top: 50%;
-    width: 100%;
-    text-align: center;
-    z-index: 2;
-    max-width: 90%;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  
-  /* Player message */
-  .player-message {
-    position: absolute;
-    top: 38%;
-    width: 100%;
-    text-align: center;
-    z-index: 2;
-    max-width: 90%;
-    left: 50%;
-    transform: translateX(-50%);
-    word-wrap: break-word;
-  }
-  
-  /* Players near bottom */
-  .player-area {
-    position: absolute;
-    bottom: 10%;
-    width: 100%;
-    text-align: center;
-    z-index: 1;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    flex-wrap: wrap; 
-    gap: 20px;
-  }
-  .player-hand-container {
-    background-color: rgba(0,0,0,0.3);
-    padding: 5px;
-    border-radius: 6px;
-    min-width: 140px;
-  }
-  .player-hand-container h2 {
-    margin-bottom: 5px;
-  }
-  
-  /* Card images */
-  .card-image {
-    width: 70px;
-    height: 100px;
-    margin: 5px;
-    border-radius: 4px;
-    box-shadow: 1px 1px 5px rgba(0,0,0,0.5);
-  }
-  
-  /* Action Buttons - center-left */
-  .action-buttons {
-    position: absolute;
-    left: 5%;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 10;
-  }
-  .action-buttons .common-button {
-    width: 120px;
-  }
-  
-  .new-round-button {
-    font-size: 1rem;
-  }
-  
-  .section-spacing {
-    margin-top: 2rem;
-  }
-  .subsection-spacing {
-    margin-top: 1rem;
-  }
-  
+/* --- USERNAME / MENU PANELS ------------------------------------ */
+.join-container{
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  font-size:1.3rem;                       /* bigger text           */
+  background:rgba(0,0,0,.6);
+  padding:28px 38px;                      /* larger card           */
+  border-radius:12px;
+  text-align:center;
+}
+.join-container input{
+  width:320px; height:48px;               /* larger input          */
+  font-size:1.3rem;
+  padding:6px 10px;
+  border-radius:8px; border:none;
+  margin-top:14px;
+}
+
+/* ready button sits *below* the card, centred */
+.ready-wrapper{
+  position:absolute;
+  top:calc(50% + 130px);                  /* ~ card height + gap   */
+  left:50%; transform:translateX(-50%);
+}
+
+/* --- TABLE BACKGROUND ------------------------------------------ */
+.table-container{
+  width:100vw;height:100vh;position:relative;
+  background:url('/src/assets/background.png') center/cover no-repeat;
+  overflow:auto;
+}
+
+/* --- TITLE ------------------------------------------------------ */
+.title-banner{
+  position:absolute;top:5%;left:50%;transform:translateX(-50%);
+  font-size:3rem;white-space:nowrap;
+  z-index:10;
+}
+
+/* --- BALANCE / BET BUBBLE -------------------------------------- */
+.balance-section{
+  font-size:1.4rem;
+  position:absolute;top:20px;right:20px;
+  display:flex;flex-direction:column;gap:8px;z-index:10;
+}
+.balance-section div{
+  background:rgba(0,0,0,.5);
+  padding:6px 12px;border-radius:8px;
+}
+
+/* --- NAV BUTTONS (MENU / NEW‑ROUND) ---------------------------- */
+.back-button,
+.new-round-button{
+  position:absolute; left:5%;
+  font-size:1.3rem;
+  z-index:10;
+}
+.back-button   { top:30%; }   /* same vertical axis as action buttons‑10% */
+.new-round-button{ top:38%; } /* a bit below so they never overlap        */
+
+/* --- DEALER / PLAYER AREAS ------------------------------------- */
+.dealer-area{
+  position:absolute;top:18%;left:50%;transform:translateX(-50%);
+  width:100%;text-align:center;z-index:1;
+}
+.player-area{
+  position:absolute;bottom:12%;left:50%;transform:translateX(-50%);
+  width:100%;text-align:center;z-index:1;
+  display:flex;flex-direction:column;align-items:center;
+  gap:8px;
+}
+.dealer-area h2,
+.player-area h2{
+  font-size:2.4rem;                       /* larger score labels   */
+}
+
+.hand-display{display:flex;justify-content:center;flex-wrap:wrap;}
+.card-image{
+  width:auto;height:140px;margin:4px;     /* slightly taller cards */
+  border-radius:4px;box-shadow:1px 1px 5px rgba(0,0,0,.5);
+}
+
+/* --- ACTION BUTTON GROUP --------------------------------------- */
+.action-buttons{
+  position:absolute;left:5%;top:50%;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:14px;z-index:10;
+}
+
+/* --- CHIPS / BET CONTROLS -------------------------------------- */
+.bet-actions{
+  position:absolute;bottom:200px;width:100%;text-align:center;
+}
+.bet-actions .common-button{margin:0 16px;}  /* spacing between Clear/Deal */
+
+.chips-row{position:absolute;bottom:40px;width:100%;text-align:center;}
+.chip-image{width:130px;height:130px;margin:0 6px;cursor:pointer;} /* larger chips */
+
+/* --- COMMON BUTTON --------------------------------------------- */
+.common-button{
+  font-size:1.5rem;background:rgba(0,0,0,.5);
+  padding:10px 18px;border:none;border-radius:8px;color:#fff;cursor:pointer;
+}
+.common-button:hover{background:rgba(0,0,0,.7);}
+
+/* --- END‑OF‑ROUND / GAME‑OVER ---------------------------------- */
+.player-message,
+.game-over{
+  position:absolute;left:50%;
+  transform:translateX(-50%);
+  font-size:1.7rem;
+  padding:10px 20px;
+  border-radius:10px;
+  z-index:9;
+}
+.player-message{top:50%;transform:translate(-50%,-50%);}
+.game-over{top:45%;transform:translate(-50%,-50%);}

@@ -5,6 +5,8 @@ export default function UsernameInput({ username, setUsername, onReady }) {
   return (
     <div className="table-container">
       <h1 className="title-banner">Blackjack</h1>
+
+      {/* centred entry card ----------------------------------- */}
       <div className="join-container">
         <h2>Enter your username:</h2>
         <input
@@ -13,15 +15,20 @@ export default function UsernameInput({ username, setUsername, onReady }) {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
-        {username && (
+      </div>
+
+      {/* ready button just beneath card ----------------------- */}
+      {username && (
+        <div className="ready-wrapper">
           <button className="common-button" onClick={onReady}>
             Ready
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 UsernameInput.propTypes = {
   username: PropTypes.string.isRequired,

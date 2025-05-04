@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import SinglePlayerGame from './SinglePlayerGame';
 import MultiPlayerGame from './MultiPlayerGame';
 import UsernameInput from './components/UsernameInput';
-import ModeSelector from './components/ModeSelector';
 import { createDeck, shuffleDeck, calculateHandValue } from './utils/GameHelpers';
 import './styles.css';
 
 export default function App() {
+  /* --------------------------------------------------
+   *  GLOBAL STATE
+   * ------------------------------------------------*/
   const [username, setUsername] = useState('');
   const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState('menu');
+  const [mode, setMode] = useState('menu'); // menu | single | multi
 
+  // single‑/multiplayer shared state
   const [balance, setBalance] = useState(100);
   const [bet, setBet] = useState(0);
   const [dealerHand, setDealerHand] = useState([]);
@@ -19,12 +22,18 @@ export default function App() {
   const [dealerMessage, setDealerMessage] = useState('');
   const [playerMessage, setPlayerMessage] = useState('');
   const [canDouble, setCanDouble] = useState(false);
-  const [showActions, setShowActions] = useState(false);
+  const [showActions, setShowActions] = useState(false); // whether HIT / STAND buttons are enabled for *this* client
   const [gameOver, setGameOver] = useState(false);
   const [roundFinished, setRoundFinished] = useState(false);
+
+  // lightweight MP lobby fields (stub — real socket.io integration should replace this)
   const [lobbyJoined, setLobbyJoined] = useState(false);
   const [lobbyId, setLobbyId] = useState('');
+  const [isMyTurn, setIsMyTurn] = useState(true); // in MP only the active player has controls
 
+  /* --------------------------------------------------
+   *  HELPER—RESET STATE FOR A FRESH HAND
+   * ------------------------------------------------*/
   const resetRound = () => {
     setDealerHand([]);
     setPlayerHand([]);
@@ -34,15 +43,29 @@ export default function App() {
     setShowActions(false);
     setBet(0);
     setRoundFinished(false);
+    setIsMyTurn(true); // give turn back to this client by default (single‑player behaviour)
   };
 
+  /* --------------------------------------------------
+   *  CHIP / BETTING
+   * ------------------------------------------------*/
   const handleAddChipBet = (chipValue) => {
     if (!showActions && balance >= chipValue) {
-      setBet(prev => prev + chipValue);
-      setBalance(prev => prev - chipValue);
+      setBet((prev) => prev + chipValue);
+      setBalance((prev) => prev - chipValue);
     }
   };
 
+  const handleClearBet = () => {
+    if (!showActions) {
+      setBalance((prev) => prev + bet);
+      setBet(0);
+    }
+  };
+
+  /* --------------------------------------------------
+   *  DEAL FIRST TWO CARDS
+   * ------------------------------------------------*/
   const handleDeal = () => {
     if (bet <= 0) {
       setPlayerMessage('Place a bet first.');
@@ -61,107 +84,135 @@ export default function App() {
 
     const playerTotal = calculateHandValue(player);
     if (playerTotal === 21) {
+      // instant blackjack payout — 3:2 (≈2.5× bet including original)
+      const winnings = bet * 2.5;
+      const newBalance = balance + winnings;
+
+      setBalance(newBalance);
       setPlayerMessage('Blackjack! You win!');
-      setBalance(prev => prev + bet * 2.5);
       setShowActions(false);
       setRoundFinished(true);
-      if (balance + bet * 2.5 <= 0) setGameOver(true);
+      if (newBalance <= 0) setGameOver(true);
     } else {
-      setPlayerMessage(`Your total: ${playerTotal}`);
-      setDealerMessage(`Dealer shows: ${dealer[0].rank} of ${dealer[0].suit}`);
+      setPlayerMessage('');     
+    }
+  };
+
+  /* --------------------------------------------------
+   *  HIT / STAND / DOUBLE (single‑player or *this* client’s turn)
+   * ------------------------------------------------*/
+  const applyBustCheck = (newBalance) => {
+    if (newBalance <= 0) {
+      setGameOver(true);
     }
   };
 
   const handleHit = () => {
     const newHand = [...playerHand, deck.pop()];
     setPlayerHand(newHand);
-    setDeck(deck);
+    setDeck([...deck]); // trigger re‑render
 
     const total = calculateHandValue(newHand);
     if (total > 21) {
       setPlayerMessage(`Busted with ${total}!`);
       setShowActions(false);
       setRoundFinished(true);
-      if (balance <= 0) setGameOver(true);
-    } else {
-      setPlayerMessage(`Your total: ${total}`);
-    }
+      applyBustCheck(balance);
+    } 
   };
 
   const handleStand = () => {
+    // ----- dealer plays out -----
     let dealerTotal = calculateHandValue(dealerHand);
-    let newDeck = [...deck];
-    let newDealerHand = [...dealerHand];
+    const newDeck = [...deck];
+    const newDealer = [...dealerHand];
 
     while (dealerTotal < 17) {
-      newDealerHand.push(newDeck.pop());
-      dealerTotal = calculateHandValue(newDealerHand);
+      newDealer.push(newDeck.pop());
+      dealerTotal = calculateHandValue(newDealer);
     }
 
-    setDealerHand(newDealerHand);
+    setDealerHand(newDealer);
     setDeck(newDeck);
 
+    // ----- settle bets -----
     const playerTotal = calculateHandValue(playerHand);
     let result = '';
+    let newBalance = balance;
 
     if (dealerTotal > 21 || playerTotal > dealerTotal) {
       result = 'You win!';
-      setBalance(prev => prev + bet * 2);
+      newBalance += bet * 2;
     } else if (dealerTotal === playerTotal) {
       result = 'Push (tie).';
-      setBalance(prev => prev + bet);
+      newBalance += bet; // return original bet
     } else {
       result = 'Dealer wins.';
+      // bet already deducted when placing chips, so nothing to add
     }
 
-    setDealerMessage(`Dealer total: ${dealerTotal}`);
+    setBalance(newBalance);
+
     setPlayerMessage(result);
     setShowActions(false);
     setRoundFinished(true);
-    if (balance <= 0) setGameOver(true);
+    applyBustCheck(newBalance);
   };
 
   const handleDouble = () => {
-    if (balance < bet) {
-      setPlayerMessage('Not enough balance to double.');
+    if (!showActions || bet === 0 || balance < bet) {
+      setPlayerMessage('Cannot double right now.');
       return;
     }
-    setBalance(prev => prev - bet);
-    setBet(prev => prev * 2);
+    // take additional bet, double and play exactly one hit then stand
+    setBalance((prev) => prev - bet);
+    setBet((prev) => prev * 2);
     handleHit();
-    handleStand();
+    if (!roundFinished) handleStand();
   };
 
-  const handleClearBet = () => {
-    setBalance(prev => prev + bet);
-    setBet(0);
-  };
-
+  /* --------------------------------------------------
+   *  NEW ROUND & NAVIGATION
+   * ------------------------------------------------*/
   const handleNewRound = () => {
+    // Always clear any lingering game‑over state first
+    setGameOver(false);
+
     if (balance <= 0) {
+      // player broke → immediate game‑over
       setGameOver(true);
-    } else {
-      resetRound();
+      return;
     }
+    resetRound();
   };
 
   const handleBackToMenu = () => {
     setMode('menu');
+    setGameOver(false);
     resetRound();
     setBalance(100);
     setLobbyId('');
+    setLobbyJoined(false);
   };
 
+  /* --------------------------------------------------
+   *  LIGHTWEIGHT LOBBY STUB (replace with socket.io)
+   * ------------------------------------------------*/
   const handleCreateLobby = () => {
     setLobbyJoined(true);
+    setMode('multi');
   };
 
   const handleJoinLobby = () => {
-    if (lobbyId.trim() !== '') {
+    if (lobbyId.trim()) {
       setLobbyJoined(true);
+      setMode('multi');
     }
   };
 
+  /* --------------------------------------------------
+   *  RENDER SWITCHER
+   * ------------------------------------------------*/
   if (!ready) {
     return (
       <div className="background">
@@ -177,7 +228,8 @@ export default function App() {
   if (mode === 'menu') {
     return (
       <div className="table-container background">
-        <div className="join-container background">
+        <h1 className="title-banner">Blackjack</h1>
+          <div className="join-container background">
           <h2>Welcome, {username}!</h2>
           <p>Play Singleplayer</p>
           <button className="common-button" onClick={() => setMode('single')}>
@@ -227,6 +279,7 @@ export default function App() {
     );
   }
 
+  // ────────────────────── MULTIPLAYER ──────────────────────
   return (
     <MultiPlayerGame
       onBack={handleBackToMenu}
@@ -238,7 +291,7 @@ export default function App() {
       dealerMessage={dealerMessage}
       playerMessage={playerMessage}
       canDouble={canDouble}
-      showActions={showActions}
+      showActions={showActions && isMyTurn} // controls only display on this client’s turn
       handleHit={handleHit}
       handleStand={handleStand}
       handleDouble={handleDouble}
@@ -249,6 +302,7 @@ export default function App() {
       gameOver={gameOver}
       roundFinished={roundFinished}
       lobbyJoined={lobbyJoined}
+      isMyTurn={isMyTurn}
     />
   );
 }
