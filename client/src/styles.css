@@ -29,9 +29,9 @@
     background-color: rgba(0, 0, 0, 0.6);
     padding: 20px;
     border-radius: 8px;
-    max-width: 300px; /* So text can wrap, avoiding horizontal overflow */
-    width: 80%;
+    width: 300px;
   }
+  
   
   .join-container input {
     padding: 8px;
@@ -207,7 +207,7 @@
   /* Players near bottom */
   .player-area {
     position: absolute;
-    bottom: 5%;
+    bottom: 10%;
     width: 100%;
     text-align: center;
     z-index: 1;

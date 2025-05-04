@@ -1,37 +1,53 @@
-// path: blackjack/client/src/GameHelpers.js
+// src/utils/GameHelpers.js
+
+export function createDeck() {
+  const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
+  const deck = [];
+  suits.forEach(suit => {
+    ranks.forEach(rank => {
+      deck.push({ suit, rank });
+    });
+  });
+  return deck;
+}
+
+export function shuffleDeck(deck) {
+  const shuffled = [...deck];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+export function calculateHandValue(hand) {
+  let value = 0;
+  let aces = 0;
+  hand.forEach(card => {
+    if (['Jack', 'Queen', 'King'].includes(card.rank)) {
+      value += 10;
+    } else if (card.rank === 'Ace') {
+      value += 11;
+      aces += 1;
+    } else {
+      value += parseInt(card.rank, 10);
+    }
+  });
+  while (value > 21 && aces) {
+    value -= 10;
+    aces -= 1;
+  }
+  return value;
+}
+
+// Dynamically import all card images
+const cardImages = import.meta.glob('../assets/playing_cards/*.png', { eager: true, import: 'default' });
 
 export function getCardImage(card) {
-    if (!card || card.rank === 'Hidden') {
-      return '/src/assets/playing_cards/card_back.png';
-    }
-    const rankMap = {
-      A: 'Ace', K: 'King', Q: 'Queen', J: 'Jack',
-      10: '10', 9: '9', 8: '8', 7: '7',
-      6: '6', 5: '5', 4: '4', 3: '3', 2: '2',
-    };
-    const suitMap = {
-      Spades: 'S', Hearts: 'H', Clubs: 'C', Diamonds: 'D',
-    };
-    return `/src/assets/playing_cards/${rankMap[card.rank]}${suitMap[card.suit]}.png`;
+  if (!card || card.rank === 'Hidden') {
+    return cardImages['../assets/playing_cards/card_back.png'];
   }
-  
-  export function calculateHandTotal(hand) {
-    let total = 0;
-    let aces = 0;
-    hand.forEach(card => {
-      if (card.rank === 'A') {
-        aces += 1;
-        total += 11;
-      } else if (['K', 'Q', 'J'].includes(card.rank)) {
-        total += 10;
-      } else {
-        total += Number(card.rank);
-      }
-    });
-    while (total > 21 && aces > 0) {
-      total -= 10;
-      aces -= 1;
-    }
-    return total;
-  }
-  
+  const key = `../assets/playing_cards/${card.rank}_of_${card.suit}.png`;
+  return cardImages[key];
+}
