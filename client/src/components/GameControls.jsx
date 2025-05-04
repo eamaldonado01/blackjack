@@ -1,5 +1,5 @@
-// src/components/GameControls.jsx
 import React from 'react';
+import PropTypes from 'prop-types';
 
 export default function GameControls({ onHit, onStand, onDouble, onClear, onDeal, canDouble, showActions }) {
   return (
@@ -20,3 +20,13 @@ export default function GameControls({ onHit, onStand, onDouble, onClear, onDeal
     </div>
   );
 }
+
+GameControls.propTypes = {
+  onHit: PropTypes.func.isRequired,
+  onStand: PropTypes.func.isRequired,
+  onDouble: PropTypes.func,
+  onClear: PropTypes.func.isRequired,
+  onDeal: PropTypes.func.isRequired,
+  canDouble: PropTypes.bool,
+  showActions: PropTypes.bool,
+};

@@ -1,5 +1,5 @@
-// src/components/GameMessage.jsx
 import React from 'react';
+import PropTypes from 'prop-types';
 
 export default function GameMessage({ dealerMessage, playerMessage }) {
   return (
@@ -9,3 +9,8 @@ export default function GameMessage({ dealerMessage, playerMessage }) {
     </div>
   );
 }
+
+GameMessage.propTypes = {
+  dealerMessage: PropTypes.string,
+  playerMessage: PropTypes.string,
+};

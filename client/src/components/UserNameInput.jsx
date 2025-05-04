@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 export default function UsernameInput({ username, setUsername, onReady }) {
   return (
@@ -21,3 +22,9 @@ export default function UsernameInput({ username, setUsername, onReady }) {
     </div>
   );
 }
+
+UsernameInput.propTypes = {
+  username: PropTypes.string.isRequired,
+  setUsername: PropTypes.func.isRequired,
+  onReady: PropTypes.func.isRequired,
+};

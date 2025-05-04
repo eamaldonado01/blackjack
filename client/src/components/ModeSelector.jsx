@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 
 export default function ModeSelector({ username, onSingle, onCreateLobby, onJoinLobby }) {
   const [lobbyId, setLobbyId] = useState('');
@@ -36,3 +37,10 @@ export default function ModeSelector({ username, onSingle, onCreateLobby, onJoin
     </div>
   );
 }
+
+ModeSelector.propTypes = {
+  username: PropTypes.string.isRequired,
+  onSingle: PropTypes.func.isRequired,
+  onCreateLobby: PropTypes.func.isRequired,
+  onJoinLobby: PropTypes.func.isRequired,
+};

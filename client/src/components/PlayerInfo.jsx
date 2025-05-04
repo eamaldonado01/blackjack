@@ -1,5 +1,5 @@
-// src/components/PlayerInfo.jsx
 import React from 'react';
+import PropTypes from 'prop-types';
 
 export default function PlayerInfo({ username, balance, currentBet }) {
   return (
@@ -10,3 +10,9 @@ export default function PlayerInfo({ username, balance, currentBet }) {
     </div>
   );
 }
+
+PlayerInfo.propTypes = {
+  username: PropTypes.string.isRequired,
+  balance: PropTypes.number.isRequired,
+  currentBet: PropTypes.number.isRequired,
+};

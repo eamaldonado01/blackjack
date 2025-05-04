@@ -1,5 +1,5 @@
-// src/components/GameBoard.jsx
 import React from 'react';
+import PropTypes from 'prop-types';
 import { getCardImage, calculateHandTotal } from '../utils/GameHelpers';
 
 export default function GameBoard({ dealerHand, playerHand, isSinglePlayer }) {
@@ -21,3 +21,9 @@ export default function GameBoard({ dealerHand, playerHand, isSinglePlayer }) {
     </div>
   );
 }
+
+GameBoard.propTypes = {
+  dealerHand: PropTypes.array.isRequired,
+  playerHand: PropTypes.array.isRequired,
+  isSinglePlayer: PropTypes.bool,
+};
