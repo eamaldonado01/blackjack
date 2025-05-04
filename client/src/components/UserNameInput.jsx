@@ -1,0 +1,23 @@
+import React from 'react';
+
+export default function UsernameInput({ username, setUsername, onReady }) {
+  return (
+    <div className="table-container">
+      <h1 className="title-banner">Blackjack</h1>
+      <div className="join-container">
+        <h2>Enter your username:</h2>
+        <input
+          type="text"
+          placeholder="Username..."
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        {username && (
+          <button className="common-button" onClick={onReady}>
+            Ready
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

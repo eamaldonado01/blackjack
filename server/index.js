@@ -1,5 +1,4 @@
 // path: blackback/server/index.js
-const lobbies = {};  // { lobbyId: { seats: [], gameStarted: false, multiGame: {...}, currentTurnSeat: 0 } }
 const express = require('express');
 const cors = require('cors');
 const { createDeck, shuffleDeck, calculateHandValue } = require('./gameLogic');
@@ -155,43 +154,6 @@ io.on('connection', (socket) => {
     console.log(`[Server] ${username} joined lobby ${lobbyId}`);
   });
   
-  socket.on('joinTable', (data) => {
-    console.log('[Server] joinTable event received:', data);
-    const { username } = data;
-    if (!username) {
-      socket.emit('joinError', 'Username is required');
-      return;
-    }
-    if (seats.some(p => p.username.toLowerCase() === username.toLowerCase())) {
-      socket.emit('joinError', 'Username is already taken');
-      return;
-    }
-    if (seats.length >= 5) {
-      socket.emit('joinError', 'Table is full (max 5 seats)');
-      return;
-    }
-
-    let seatIndex = 0;
-    if (seats.find(s => s.seatIndex === 0)) {
-      seatIndex = Math.max(0, ...seats.map(s => s.seatIndex)) + 1;
-    }
-
-    seats.push({
-      username,
-      seatIndex,
-      socketID: socket.id,
-      isReady: false,
-      isTurn: false,
-    });
-
-    broadcastTableState();
-
-    socket.emit('joinSuccess', {
-      players: seats,
-      seatIndex,
-      gameStarted,
-    });
-  });
 
   socket.on('playerReady', () => {
     const seat = seats.find(s => s.socketID === socket.id);

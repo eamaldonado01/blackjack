@@ -251,10 +251,14 @@
     width: 120px;
   }
   
-  /* The new-round-button is inside .balance-section now, so we no longer position it absolutely 
-     at the bottom. If you prefer it somewhere else, you can tweak or remove the code below. */
   .new-round-button {
-    /* no absolute positioning needed, it stacks under the two buttons in .balance-section */
     font-size: 1rem;
+  }
+  
+  .section-spacing {
+    margin-top: 2rem;
+  }
+  .subsection-spacing {
+    margin-top: 1rem;
   }
   
