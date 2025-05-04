@@ -1,3 +1,5 @@
+// path: blackback/server/index.js
+const lobbies = {};  // { lobbyId: { seats: [], gameStarted: false, multiGame: {...}, currentTurnSeat: 0 } }
 const express = require('express');
 const cors = require('cors');
 const { createDeck, shuffleDeck, calculateHandValue } = require('./gameLogic');
@@ -69,6 +71,31 @@ function broadcastMultiBlackjack() {
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
+  // NEW: Handle joining socket.io room by lobbyId
+  socket.on('joinRoom', (lobbyId, callback) => {
+    console.log(`Socket ${socket.id} joining room: ${lobbyId}`);
+    socket.join(lobbyId);
+  
+    // Initialize lobby if it doesn't exist
+    if (!lobbies[lobbyId]) {
+      lobbies[lobbyId] = {
+        seats: [],
+        gameStarted: false,
+        multiGame: {
+          deck: [],
+          dealerHand: [],
+          playerHandsBySeat: {},
+          gameOver: false,
+          message: '',
+        },
+        currentTurnSeat: 0,
+      };
+    }
+  
+    if (callback) callback();
+  });
+  
+
   socket.on('joinTable', (data) => {
     console.log('[Server] joinTable event received:', data);
     const { username } = data;
@@ -76,7 +103,6 @@ io.on('connection', (socket) => {
       socket.emit('joinError', 'Username is required');
       return;
     }
-    // If username already taken
     if (seats.some(p => p.username.toLowerCase() === username.toLowerCase())) {
       socket.emit('joinError', 'Username is already taken');
       return;
@@ -86,10 +112,9 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // If seat 0 is free => that seat is host. Otherwise seat 1, 2, etc.
     let seatIndex = 0;
-    if (seats.find(s => s.seatIndex===0)) {
-      seatIndex = Math.max(0, ...seats.map(s=>s.seatIndex)) + 1;
+    if (seats.find(s => s.seatIndex === 0)) {
+      seatIndex = Math.max(0, ...seats.map(s => s.seatIndex)) + 1;
     }
 
     seats.push({
@@ -117,39 +142,34 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', () => {
-    // Only seatIndex=0 is host
-    const hostSeat = seats.find(s => s.seatIndex===0);
+    const hostSeat = seats.find(s => s.seatIndex === 0);
     if (!hostSeat || hostSeat.socketID !== socket.id) {
       console.log('[Server] Non-host tried startGame');
       return;
     }
 
-    // Must all be ready
-    const allReady = seats.every(s=>s.isReady);
+    const allReady = seats.every(s => s.isReady);
     if (!allReady) {
       console.log('[Server] Not all players are ready => ignoring');
       return;
     }
     gameStarted = true;
     currentTurnSeat = 0;
-    seats.forEach(s => s.isTurn=false);
-    const seat0 = seats.find(s=>s.seatIndex===0);
+    seats.forEach(s => s.isTurn = false);
+    const seat0 = seats.find(s => s.seatIndex === 0);
     if (seat0) seat0.isTurn = true;
 
-    // Reset multiGame state for multi-seat
     multiGame.deck = shuffleDeck(createDeck());
     multiGame.dealerHand = [];
     multiGame.playerHandsBySeat = {};
     multiGame.gameOver = false;
     multiGame.message = '';
 
-    // Deal 2 cards to each seat
     seats.forEach((s) => {
       const card1 = multiGame.deck.pop();
       const card2 = multiGame.deck.pop();
       multiGame.playerHandsBySeat[s.seatIndex] = [card1, card2];
     });
-    // Dealer gets 2
     multiGame.dealerHand = [multiGame.deck.pop(), multiGame.deck.pop()];
 
     multiGame.message = `Dealer shows: ${multiGame.dealerHand[0].rank} of ${multiGame.dealerHand[0].suit}`;
@@ -159,16 +179,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    seats = seats.filter(s => s.socketID!==socket.id);
-    if (seats.length===0) {
+    seats = seats.filter(s => s.socketID !== socket.id);
+    if (seats.length === 0) {
       gameStarted = false;
       currentTurnSeat = 0;
-      // Could reset multiGame if desired
     }
     broadcastTableState();
     console.log('Client disconnected:', socket.id);
   });
 });
+
 
 /** ========== Turn & Dealer Logic for Multi-Seat ========== */
 function nextSeatTurn() {
