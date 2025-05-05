@@ -74,12 +74,11 @@ body{
 /* --- NAV BUTTONS (MENU / NEW‑ROUND) ---------------------------- */
 .back-button,
 .new-round-button{
-  position:absolute; left:5%;
+  position:absolute; left:5%; top:56%;
   font-size:1.3rem;
   z-index:10;
 }
 .back-button   { top:20%; }   /* same vertical axis as action buttons‑10% */
-.new-round-button{ top:28%; } /* a bit below so they never overlap        */
 
 /* --- DEALER / PLAYER AREAS ------------------------------------- */
 .dealer-area{

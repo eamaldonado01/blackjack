@@ -8,15 +8,20 @@ import chip100 from './assets/chips/100.png';
 
 export default function MultiPlayerGame({
   onBack, uid,
-  lobbyData, lobbyId, gameState,
-  allReady, hostStartGame,
+  lobbyData, lobbyId,
   balance, bet,
+
+  allReady, hostStartGame,
+
+  /* waiting‑room betting */
   handleAddChipBet, handleClearBet, handleDeal,
-  handleHit, handleStand,
+
+  /* gameplay */
+  gameState, handleHit, handleStand, hostNewRound,
 }) {
   const chipImages = {5:chip5,10:chip10,25:chip25,50:chip50,100:chip100};
 
-    /* --------------- loading ----------------------------------------- */
+  /* ------------- guard -------------------------------------------- */
   if (!lobbyData) {
     return (
       <div className="table-container">
@@ -25,13 +30,13 @@ export default function MultiPlayerGame({
     );
   }
 
-  /* --------------- WAITING ROOM ------------------------------------ */
+  /* ------------- WAITING ROOM ------------------------------------- */
   if (!gameState) {
     return (
       <div className="table-container">
         <button className="common-button back-button" onClick={onBack}>Menu</button>
-        <h1 className="title-banner">Blackjack – Multiplayer</h1>
 
+        <h1 className="title-banner">Blackjack – Multiplayer</h1>
         <div className="turn-message">
           Lobby ID:&nbsp;<strong>{lobbyId}</strong>
         </div>
@@ -40,15 +45,21 @@ export default function MultiPlayerGame({
           {(lobbyData.players ?? []).map(p=>(
             <li key={p}>
               {p === lobbyData.host && '👑 '}
-              {lobbyData.usernames[p]} —&nbsp;
-              <span style={{color:lobbyData.ready[p]?'#0f0':'#f44'}}>
+              {lobbyData.usernames?.[p] ?? p} —&nbsp;
+              <span style={{color:lobbyData.ready?.[p]?'#0f0':'#f44'}}>
                 {lobbyData.ready?.[p] ? 'Ready' : 'Not ready'}
               </span>
             </li>
           ))}
         </ul>
 
-        {/* betting controls for players who haven't pressed Deal yet */}
+        {/* local balance bubble */}
+        <div className="balance-section">
+          <div>Balance: ${balance}</div>
+          <div>Current Bet: ${bet}</div>
+        </div>
+
+        {/* betting controls */}
         {!lobbyData.ready?.[uid] && (
           <>
             <div className="bet-actions">
@@ -72,13 +83,12 @@ export default function MultiPlayerGame({
     );
   }
 
-  /* --------------- ACTIVE GAME ------------------------------------- */
-  const dealerHand  = gameState.dealerHand;
-  const myIdx       = lobbyData.players.indexOf(uid);
-  const isMyTurn    = gameState.currentIdx === myIdx;
+  /* ------------- ACTIVE GAME -------------------------------------- */
+  const dealerHand = gameState.dealerHand;
+  const myIdx      = lobbyData.players.indexOf(uid);
+  const isMyTurn   = gameState.currentIdx === myIdx;
 
-  /* create ordered player blocks (right → left) */
-  const blocks = [...lobbyData.players].reverse().map(pid=>{
+  const blocks = [...lobbyData.players].reverse().map(pid => {
     const hand = gameState.hands[pid];
     return (
       <div className="mp-player-area" key={pid}>
@@ -88,8 +98,8 @@ export default function MultiPlayerGame({
           )}
         </div>
         <h3>
-          {lobbyData.usernames[pid]}
-          {gameState.currentIdx === lobbyData.players.indexOf(pid) && ' ←'}
+          {lobbyData.usernames?.[pid] ?? pid}
+          {gameState.currentIdx === lobbyData.players.indexOf(pid)}
           &nbsp;– {calculateHandValue(hand)}
         </h3>
         {gameState.outcome[pid] && <p>{gameState.outcome[pid]}</p>}
@@ -113,16 +123,21 @@ export default function MultiPlayerGame({
       </div>
 
       {/* players row */}
-      <div className="mp-players-row">
-        {blocks}
-      </div>
+      <div className="mp-players-row">{blocks}</div>
 
-      {/* action buttons if it's my turn */}
+      {/* my controls */}
       {isMyTurn && (
         <div className="action-buttons">
           <button className="common-button" onClick={handleHit}>Hit</button>
           <button className="common-button" onClick={handleStand}>Stand</button>
         </div>
+      )}
+
+      {/* host new‑round */}
+      {uid === lobbyData.host && gameState.roundFinished && (
+        <button className="common-button new-round-button" onClick={hostNewRound}>
+          New Round
+        </button>
       )}
     </div>
   );
