@@ -7,10 +7,13 @@ import useLobby from './hooks/useLobby';
 import SinglePlayerGame from './SinglePlayerGame';
 import MultiPlayerGame  from './MultiPlayerGame';
 import UsernameInput    from './components/UsernameInput';
+import { startGame, leaveLobby } from './firebase/GameActions';
+
+
 import {
   createDeck,
   shuffleDeck,
-  calculateHandValue
+  calculateHandValue,
 } from './utils/GameHelpers';
 
 import { db } from './firebase';
@@ -20,118 +23,7 @@ import {
 } from 'firebase/firestore';
 import './styles.css';
 
-
-
-/* ----------------------------------------------------------- */
-
 const uid = nanoid(8);
-
-/* ============================================================= */
-/*               ROBUST PLAYER‑DISCONNECT HANDLER                */
-/* ============================================================= */
-async function leaveLobby(db, lobbyId, uid) {
-  dlog('leaveLobby START', { lobbyId, uid });
-
-  await runTransaction(db, async tx => {
-    const lobbyRef = doc(db, 'lobbies', lobbyId);
-    const gameRef  = doc(db, 'lobbies', lobbyId, 'game', 'state');
-
-    const [lobbySnap, gameSnap] = await Promise.all([
-      tx.get(lobbyRef),
-      tx.get(gameRef),
-    ]);
-
-    if (!lobbySnap.exists()) {
-      dlog('leaveLobby: lobby document does NOT exist (already deleted)');
-      return;
-    }
-
-    const lobby = lobbySnap.data();
-    dlog('leaveLobby: LOBBY BEFORE', JSON.parse(JSON.stringify(lobby)));
-
-    const removedIdx = lobby.players.indexOf(uid);
-    if (removedIdx === -1) {
-      dlog('leaveLobby: uid not found in players list (already removed?)');
-      return;
-    }
-
-    const players   = lobby.players.filter(p => p !== uid);
-    const ready     = { ...(lobby.ready || {}) };
-    const bets      = { ...(lobby.bets || {}) };
-    const balances  = { ...(lobby.balances || {}) };
-    const usernames = { ...(lobby.usernames || {}) };
-
-    delete ready[uid];
-    delete bets[uid];
-    delete balances[uid];
-    delete usernames[uid];
-
-    let newHost = lobby.host;
-    if (lobby.host === uid) {
-      newHost = players[0] || null;
-      dlog('leaveLobby: host is leaving; transferring host to', newHost);
-    }
-
-    if (players.length === 0) {
-      dlog('leaveLobby: no players left, deleting lobby');
-      tx.delete(lobbyRef);
-    } else {
-      tx.update(lobbyRef, {
-        players,
-        ready,
-        bets,
-        balances,
-        usernames,
-        host: newHost,
-      });
-      dlog('leaveLobby: LOBBY AFTER', { players, host: newHost });
-    }
-
-    if (!gameSnap.exists()) {
-      dlog('leaveLobby: no active game doc found');
-      return;
-    }
-
-    const g = gameSnap.data();
-    dlog('leaveLobby: GAME BEFORE', JSON.parse(JSON.stringify(g)));
-
-    delete g.hands[uid];
-    delete g.bets[uid];
-    delete g.balances[uid];
-    delete g.outcome[uid];
-
-    if (g.currentIdx >= removedIdx) g.currentIdx = Math.max(0, g.currentIdx - 1);
-
-    if (!g.roundFinished && g.currentIdx >= players.length) {
-      if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
-      while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
-
-      const dealerTot = calculateHandValue(g.dealerHand);
-      players.forEach(p => {
-        if (g.outcome[p] === 'Busted!') return;
-        const ptot = calculateHandValue(g.hands[p]);
-        let msg = '', bal = g.balances[p];
-        if (dealerTot > 21 || ptot > dealerTot) { msg = 'Win!'; bal += g.bets[p] * 2; }
-        else if (ptot === dealerTot) { msg = 'Push'; bal += g.bets[p]; }
-        else { msg = 'Lose'; }
-        g.outcome[p] = msg;
-        g.balances[p] = bal;
-      });
-      g.roundFinished = true;
-      dlog('leaveLobby: GAME AUTO-SETTLED for remaining players');
-    }
-
-    tx.update(gameRef, g);
-    dlog('leaveLobby: GAME AFTER', {
-      hands: Object.keys(g.hands),
-      currentIdx: g.currentIdx,
-      roundFinished: g.roundFinished,
-    });
-  });
-
-  dlog('leaveLobby TRANSACTION COMMITTED ✓');
-}
-
 
 /* =========================================================== */
 
@@ -348,59 +240,19 @@ useEffect(() => {
     lobbyData?.players?.length > 0 &&
     Object.values(lobbyData.ready || {}).every(Boolean);
 
-  const hostStartGame = async () => {
-    if (uid !== lobbyData.host || !allReady) return;
 
-    const deck      = shuffleDeck(createDeck());
-    const hands     = {};
-    const balances  = {};
-    const bets      = lobbyData.bets;
-    const prevBal   = lobbyData.balances || {};
 
-    lobbyData.players.forEach(p => {
-      hands[p]    = [deck.pop(), deck.pop()];
-      balances[p] = (prevBal[p] ?? 100) - bets[p];
-    });
-
-    /* first player that doesn’t start with 21 gets the first turn */
-    const firstIdx   = lobbyData.players.findIndex(
-      p => calculateHandValue(hands[p]) !== 21
-    );
-    const currentIdx = firstIdx === -1 ? lobbyData.players.length : firstIdx;
-
-    const gameDoc = {
-      deck,
-      hands,
-      dealerHand: [deck.pop(), { rank: 'Hidden', suit: 'Hidden' }],
-      bets,
-      balances,
-      currentIdx,
-      roundFinished: false,
-      outcome: {}
+    const hostStartGame = async () => {
+      if (uid !== lobbyData.host || !allReady) return;
+      try {
+        await startGame(db, lobbyId, lobbyData);
+        console.log('Game started successfully!');
+      } catch (err) {
+        console.error('startGame failed:', err);
+      }
     };
-
-    /* everyone starts on 21 => skip to dealer immediately */
-    if (currentIdx >= lobbyData.players.length) {
-      const dealerHand = gameDoc.dealerHand;
-      dealerHand[1] = deck.pop();
-      while (calculateHandValue(dealerHand, true) < 17) dealerHand.push(deck.pop());
-
-      const dealerTot = calculateHandValue(dealerHand);
-      lobbyData.players.forEach(p => {
-        const ptot = calculateHandValue(hands[p]);
-        let msg = '', bal = balances[p];
-        if (dealerTot > 21 || ptot > dealerTot)      { msg = 'Win!';  bal += bets[p] * 2; }
-        else if (ptot === dealerTot)                 { msg = 'Push'; bal += bets[p];      }
-        else                                         { msg = 'Lose'; }
-        gameDoc.outcome[p]  = msg;
-        gameDoc.balances[p] = bal;
-      });
-      gameDoc.roundFinished = true;
-    }
-
-    await setDoc(doc(db, 'lobbies', lobbyId, 'game', 'state'), gameDoc);
-    await updateDoc(doc(db, 'lobbies', lobbyId), { status: 'playing' });
-  };
+    
+    
 
   /* the host clicks after a finished round to reset everything */
   const hostNewRound = async () => {

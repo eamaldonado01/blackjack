@@ -51,3 +51,5 @@ export function getCardImage(card) {
   const key = `../assets/playing_cards/${card.rank}_of_${card.suit}.png`;
   return cardImages[key];
 }
+
+
