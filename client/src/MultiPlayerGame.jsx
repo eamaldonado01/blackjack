@@ -121,23 +121,26 @@ export default function MultiPlayerGame({
 
       {/* --------- Players ---------- */}
       <div className="mp-players-row">
-        {[...lobbyData.players].reverse().map(pid => {
-          const hand = gameState.hands[pid];
-          return (
-            <div className="mp-player-area" key={pid}>
-              <div className="hand-display">
-                {hand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card"/>)}
-              </div>
-              <h3 className="player-name">
-                {lobbyData.usernames[pid]} – {calculateHandValue(hand)}
-              </h3>
-              {gameState.outcome[pid] && (
-                <p className="player-result">{gameState.outcome[pid]}</p>
-              )}
-            </div>
-          );
-        })}
+  {[...lobbyData.players].reverse().map(pid => {
+    const hand = gameState.hands[pid] ?? [];      // <-- safe‑guard
+    if (hand.length === 0) return null;           // skip if no hand yet
+    return (
+      <div className="mp-player-area" key={pid}>
+        <div className="hand-display">
+          {hand.map((c,i)=>(
+            <img key={i} src={getCardImage(c)} className="card-image" alt="card"/>
+          ))}
+        </div>
+        <h3 className="player-name">
+          {lobbyData.usernames[pid]} – {calculateHandValue(hand)}
+        </h3>
+        {gameState.outcome[pid] && (
+          <p className="player-result">{gameState.outcome[pid]}</p>
+        )}
       </div>
+    );
+  })}
+</div>
 
       {/* --------- Action Buttons ---------- */}
       {isMyTurn && (
