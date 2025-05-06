@@ -5,16 +5,28 @@ body{
   background:#2c2c2c;
   color:#fff;
 }
+.player-name{font-size:2.4rem;margin:6px 0 2px;}
+.player-result{font-size:1.7rem;margin:0}
+
+.lobby-banner{
+  position:absolute;left:5%;top:6%;
+  padding:6px 12px;border-radius:8px;
+  background:rgba(0,0,0,.5);
+  font-size:1.5rem;
+  z-index:10;
+  pointer-events: none;
+}
 
 /* --- MULTIPLAYER DISPLAY LIST ------------------------------------------------------- */
-.player-list{list-style:none;padding:0;text-align:center;margin-top:80px}
+.player-list{list-style:none;padding:0;text-align:center;margin: 20px auto;font-size: 2.2rem;}
 .player-list li{font-size:1.4rem;margin:8px 0}
 
 .host-start-btn{margin-top:40px}
 
 .mp-players-row{
-  position:absolute;bottom:14%;left:50%;transform:translateX(-50%);
+  position:absolute;bottom:6%;left:50%;transform:translateX(-50%);
   display:flex;gap:60px;max-width:90%;justify-content:center;
+  .no-wrap{flex-wrap:nowrap;}
 }
 .mp-player-area{display:flex;flex-direction:column;align-items:center;width:220px}
 
@@ -136,3 +148,14 @@ body{
 }
 .player-message{top:50%;transform:translate(-50%,-50%);}
 .game-over{top:45%;transform:translate(-50%,-50%);}
+
+/* turn indicator & lobby id in active game */
+.turn-indicator{
+  position:absolute;top:10%;left:50%;transform:translateX(-50%);
+  font-size:2rem;font-weight:bold;z-index:9;
+}
+.lobby-id-banner{
+  position:absolute;top:14%;left:50%;transform:translateX(-50%);
+  font-size:1rem;z-index:9;
+}
+
