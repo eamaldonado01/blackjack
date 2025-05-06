@@ -1,5 +1,5 @@
-import { doc, runTransaction } from 'firebase/firestore';
 import { createDeck, shuffleDeck, calculateHandValue } from '../utils/GameHelpers';
+import { doc, updateDoc, arrayRemove, deleteField, runTransaction} from 'firebase/firestore';
 
 /**
  * Starts a new game round in the specified lobby.
@@ -24,7 +24,7 @@ export async function startGame(db, lobbyId, lobbyData) {
     players.forEach(p => {
       hands[p] = [deck.pop(), deck.pop()];
       bets[p] = lobby.bets[p];
-      balances[p] = lobby.balances[p];
+      balances[p] = lobby.balances[p] - lobby.bets[p];
       outcome[p] = '';
     });
 
@@ -112,10 +112,10 @@ export async function leaveLobby(db, lobbyId, uid) {
       const wasCurrentTurn = g.currentIdx === removedIdx;
       if (g.currentIdx > removedIdx) g.currentIdx--;
   
-      /* auto‑finish dealer if nothing left to do */
+      const activePlayers = players.filter(p => !g.outcome[p]);
       if (
         !g.roundFinished &&
-        (g.currentIdx >= players.length || wasCurrentTurn)
+        (activePlayers.length === 0 || g.currentIdx >= players.length)
       ) {
         if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
         while (calculateHandValue(g.dealerHand, true) < 17)
@@ -136,5 +136,18 @@ export async function leaveLobby(db, lobbyId, uid) {
   
       tx.update(gameRef, g);
     });
+  }
+
+  export async function quickLeaveLobby(db, lobbyId, uid) {
+    const lobbyRef = doc(db, 'lobbies', lobbyId);
+    try {
+      await updateDoc(lobbyRef, {
+        players: arrayRemove(uid),
+        [`ready.${uid}`]:     deleteField(),
+        [`bets.${uid}`]:      deleteField(),
+        [`balances.${uid}`]:  deleteField(),
+        [`usernames.${uid}`]: deleteField(),
+      });
+    } catch (_) { /* best‑effort */ }
   }
   
