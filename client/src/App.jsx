@@ -1,3 +1,6 @@
+const DBG = true;
+const dlog = (...args) => DBG && console.log('[App]', ...args);
+
 import React, { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import useLobby from './hooks/useLobby';
@@ -17,71 +20,118 @@ import {
 } from 'firebase/firestore';
 import './styles.css';
 
+
+
 /* ----------------------------------------------------------- */
 
 const uid = nanoid(8);
 
+/* ============================================================= */
+/*               ROBUST PLAYER‑DISCONNECT HANDLER                */
+/* ============================================================= */
 async function leaveLobby(db, lobbyId, uid) {
-  if (!lobbyId) return;
+  dlog('leaveLobby START', { lobbyId, uid });
 
   await runTransaction(db, async tx => {
-    /* ---- snapshot BEFORE we mutate so we know the old index ---- */
-    const lobbyRef  = doc(db, 'lobbies', lobbyId);
-    const lobbySnap = await tx.get(lobbyRef);
-    if (!lobbySnap.exists()) return;
-
-    const lobby        = lobbySnap.data();
-    const removedIndex = lobby.players.indexOf(uid);   // index BEFORE removal
-
-    /* ---- strip the player out of the lobby doc ---- */
-    lobby.players  = lobby.players.filter(p => p !== uid);
-    if (lobby.ready)     delete lobby.ready[uid];
-    if (lobby.bets)      delete lobby.bets[uid];
-    if (lobby.balances)  delete lobby.balances[uid];
-    if (lobby.usernames) delete lobby.usernames[uid];
-
-    if (lobby.host === uid && lobby.players.length) lobby.host = lobby.players[0];
-
-    if (!lobby.players.length) tx.delete(lobbyRef);
-    else                       tx.update(lobbyRef, lobby);
-
-    /* ---- update active game (if any) ---- */
+    const lobbyRef = doc(db, 'lobbies', lobbyId);
     const gameRef  = doc(db, 'lobbies', lobbyId, 'game', 'state');
-    const gameSnap = await tx.get(gameRef);
-    if (!gameSnap.exists()) return;
+
+    const [lobbySnap, gameSnap] = await Promise.all([
+      tx.get(lobbyRef),
+      tx.get(gameRef),
+    ]);
+
+    if (!lobbySnap.exists()) {
+      dlog('leaveLobby: lobby document does NOT exist (already deleted)');
+      return;
+    }
+
+    const lobby = lobbySnap.data();
+    dlog('leaveLobby: LOBBY BEFORE', JSON.parse(JSON.stringify(lobby)));
+
+    const removedIdx = lobby.players.indexOf(uid);
+    if (removedIdx === -1) {
+      dlog('leaveLobby: uid not found in players list (already removed?)');
+      return;
+    }
+
+    const players   = lobby.players.filter(p => p !== uid);
+    const ready     = { ...(lobby.ready || {}) };
+    const bets      = { ...(lobby.bets || {}) };
+    const balances  = { ...(lobby.balances || {}) };
+    const usernames = { ...(lobby.usernames || {}) };
+
+    delete ready[uid];
+    delete bets[uid];
+    delete balances[uid];
+    delete usernames[uid];
+
+    let newHost = lobby.host;
+    if (lobby.host === uid) {
+      newHost = players[0] || null;
+      dlog('leaveLobby: host is leaving; transferring host to', newHost);
+    }
+
+    if (players.length === 0) {
+      dlog('leaveLobby: no players left, deleting lobby');
+      tx.delete(lobbyRef);
+    } else {
+      tx.update(lobbyRef, {
+        players,
+        ready,
+        bets,
+        balances,
+        usernames,
+        host: newHost,
+      });
+      dlog('leaveLobby: LOBBY AFTER', { players, host: newHost });
+    }
+
+    if (!gameSnap.exists()) {
+      dlog('leaveLobby: no active game doc found');
+      return;
+    }
 
     const g = gameSnap.data();
+    dlog('leaveLobby: GAME BEFORE', JSON.parse(JSON.stringify(g)));
 
     delete g.hands[uid];
     delete g.bets[uid];
     delete g.balances[uid];
     delete g.outcome[uid];
 
-    /* re‑align turn pointer */
-    if (removedIndex !== -1 && g.currentIdx >= removedIndex) g.currentIdx--;
-    if (g.currentIdx < 0) g.currentIdx = 0;
+    if (g.currentIdx >= removedIdx) g.currentIdx = Math.max(0, g.currentIdx - 1);
 
-    /* if no active player remains -> auto‑finish round */
-    if (!g.roundFinished && g.currentIdx >= lobby.players.length) {
+    if (!g.roundFinished && g.currentIdx >= players.length) {
       if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
       while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
 
       const dealerTot = calculateHandValue(g.dealerHand);
-      lobby.players.forEach(p => {
+      players.forEach(p => {
         if (g.outcome[p] === 'Busted!') return;
         const ptot = calculateHandValue(g.hands[p]);
         let msg = '', bal = g.balances[p];
-        if (dealerTot > 21 || ptot > dealerTot)   { msg='Win!';  bal += g.bets[p]*2; }
-        else if (ptot === dealerTot)              { msg='Push'; bal += g.bets[p];    }
-        else                                      { msg='Lose'; }
-        g.outcome[p] = msg; g.balances[p] = bal;
+        if (dealerTot > 21 || ptot > dealerTot) { msg = 'Win!'; bal += g.bets[p] * 2; }
+        else if (ptot === dealerTot) { msg = 'Push'; bal += g.bets[p]; }
+        else { msg = 'Lose'; }
+        g.outcome[p] = msg;
+        g.balances[p] = bal;
       });
       g.roundFinished = true;
+      dlog('leaveLobby: GAME AUTO-SETTLED for remaining players');
     }
 
     tx.update(gameRef, g);
+    dlog('leaveLobby: GAME AFTER', {
+      hands: Object.keys(g.hands),
+      currentIdx: g.currentIdx,
+      roundFinished: g.roundFinished,
+    });
   });
+
+  dlog('leaveLobby TRANSACTION COMMITTED ✓');
 }
+
 
 /* =========================================================== */
 
@@ -147,13 +197,37 @@ export default function App() {
       uid]);
 
   /* call leaveLobby if the tab/window is closed -------------------------- */
-  useEffect(() => {
-    const handler = () => {
-      if (mode === 'multi' && lobbyId) leaveLobby(db, lobbyId, uid);
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [mode, lobbyId]);
+/* beforeunload effect */
+useEffect(() => {
+  const handler = () => {
+    dlog('beforeunload fired – leaving lobby');
+    if (mode === 'multi' && lobbyId) leaveLobby(db, lobbyId, uid)
+      .then(() => dlog('leaveLobby (BL) ✓'))
+      .catch(err => console.error('leaveLobby (BL) error', err));
+  };
+  window.addEventListener('beforeunload', handler);
+  return () => window.removeEventListener('beforeunload', handler);
+}, [mode, lobbyId]);
+
+/* live snapshot effect */
+useEffect(() => {
+  if (!lobbyId || lobbyData?.status !== 'playing') {
+    setGameState(null);
+    return;
+  }
+  dlog('Subscribing to game state doc for lobby', lobbyId);
+  const unsub = onSnapshot(
+    doc(db, 'lobbies', lobbyId, 'game', 'state'),
+    snap => {
+      dlog('Game state snapshot update:', snap.exists() ? snap.data() : 'doc deleted');
+      setGameState(snap.data());
+    }
+  );
+  return () => {
+    dlog('Unsubscribing from game state doc for lobby', lobbyId);
+    unsub();
+  };
+}, [lobbyId, lobbyData?.status]);
 
   /* ----------------------- helpers & actions --------------------------- */
   const resetRound = () => {
@@ -421,10 +495,14 @@ export default function App() {
 
   /* ---------- navigation (Menu button) ---------- */
   const handleBackToMenu = async () => {
+    dlog('Menu clicked in mode:', mode, 'lobbyId:', lobbyId);
     try {
-      if (mode === 'multi' && lobbyId) await leaveLobby(db, lobbyId, uid);
+      if (mode === 'multi' && lobbyId) {
+        await leaveLobby(db, lobbyId, uid);
+        dlog('leaveLobby awaited ✓');
+      }
     } catch (e) {
-      console.error('leaveLobby failed', e);
+      console.error('leaveLobby threw', e);
     } finally {
       setMode('menu');
       resetRound();
