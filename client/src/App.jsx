@@ -1,14 +1,22 @@
-const DBG = true;
-const dlog = (...args) => DBG && console.log('[App]', ...args);
-
-import React, { useState, useEffect } from 'react';
+/* src/App.jsx */
+import React, { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
-import useLobby from './hooks/useLobby';
+
 import SinglePlayerGame from './SinglePlayerGame';
 import MultiPlayerGame  from './MultiPlayerGame';
 import UsernameInput    from './components/UsernameInput';
-import { startGame, leaveLobby } from './firebase/GameActions';
+import { useLobby, setupPresence } from './hooks/useLobby';
 
+import {
+  startGame,
+  leaveLobby,
+  quickLeaveLobby,
+} from './firebase/GameActions';
+
+import { db } from './firebase/firebaseConfig';
+import {
+  doc, onSnapshot, getDoc, updateDoc, runTransaction,
+} from 'firebase/firestore';
 
 import {
   createDeck,
@@ -16,312 +24,236 @@ import {
   calculateHandValue,
 } from './utils/GameHelpers';
 
-import { db } from './firebase';
-import {
-  doc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, runTransaction, getDoc
-} from 'firebase/firestore';
 import './styles.css';
 
-const uid = nanoid(8);
+const DBG  = true;
+const dlog = (...a) => DBG && console.log('[App]', ...a);
+const uid  = nanoid(8);
 
-/* =========================================================== */
-
+/* ===================================================================== */
 export default function App() {
-  /* generic state -------------------------------------------------------- */
-  const [username, setUsername]         = useState('');
-  const [readyScreen, setReadyScreen]   = useState(false);
-  const [mode, setMode]                 = useState('menu');   // 'menu' | 'single' | 'multi'
+  /* ------------- generic -------------------------------------------- */
+  const [username , setUsername ] = useState('');
+  const [readyScrn , setReadyScrn] = useState(false);
+  const [mode     , setMode     ] = useState('menu');   // menu | single | multi
 
-  /* single‑player OR local pre‑bet figures ------------------------------- */
-  const [balance, setBalance]           = useState(100);
-  const [bet, setBet]                   = useState(0);
-
-  const [dealerHand, setDealerHand]     = useState([]);
-  const [playerHand, setPlayerHand]     = useState([]);
-  const [deck, setDeck]                 = useState([]);
-
-  const [playerMessage, setPlayerMessage] = useState('');
-  const [canDouble, setCanDouble]       = useState(false);
-  const [showActions, setShowActions]   = useState(false);
+  /* ------------- local betting / round ------------------------------ */
+  const [balance     , setBalance     ] = useState(100);
+  const [bet         , setBet         ] = useState(0);
+  const [dealerHand  , setDealerHand  ] = useState([]);
+  const [playerHand  , setPlayerHand  ] = useState([]);
+  const [deck        , setDeck        ] = useState([]);
+  const [playerMsg   , setPlayerMsg   ] = useState('');
+  const [canDouble   , setCanDouble   ] = useState(false);
+  const [showActions , setShowActions ] = useState(false);
   const [roundFinished, setRoundFinished] = useState(false);
-  const [gameOver, setGameOver]         = useState(false);
+  const [gameOver    , setGameOver    ] = useState(false);
 
-  const [lobbyInput, setLobbyInput]     = useState('');
+  const [lobbyInput  , setLobbyInput  ] = useState('');
 
-  /* lobby / multiplayer hooks -------------------------------------------- */
+  /* ------------- lobby hook ----------------------------------------- */
   const {
     lobbyId,
     lobbyData,
     createLobby,
     joinLobby,
-    setReady: setLobbyReady       /* renamed in hook impl. */
+    setReady: setLobbyReady,
   } = useLobby(username, uid);
 
-  /* live “game” sub‑doc stream (only when a round is active) ------------- */
+  /* --------------------------------------------------------- presence */
+  const presenceSet = useRef(false);
+  useEffect(() => {
+    if (mode === 'multi' && lobbyId && !presenceSet.current) {
+      setupPresence(lobbyId, uid);
+      presenceSet.current = true;
+    }
+    if (mode !== 'multi') presenceSet.current = false;
+  }, [mode, lobbyId]);
+
+  /* -------------------------------------------------- quick leave ... */
+  useEffect(() => {
+    if (mode !== 'multi' || !lobbyId) return;
+    const bye = () => { try { quickLeaveLobby(db, lobbyId, uid); } catch {} };
+    window.addEventListener('pagehide',     bye, { capture: true });
+    window.addEventListener('beforeunload', bye, { capture: true });
+    return () => {
+      window.removeEventListener('pagehide',     bye, { capture: true });
+      window.removeEventListener('beforeunload', bye, { capture: true });
+    };
+  }, [mode, lobbyId]);
+
+  /* ---------------------------------------------- live game snapshot */
   const [gameState, setGameState] = useState(null);
   useEffect(() => {
-    if (!lobbyId || lobbyData?.status !== 'playing') {
-      setGameState(null);
-      return;
-    }
+    if (!lobbyId || lobbyData?.status !== 'playing') { setGameState(null); return; }
     const unsub = onSnapshot(
       doc(db, 'lobbies', lobbyId, 'game', 'state'),
-      snap => setGameState(snap.data())
+      snap => setGameState(snap.data()),
     );
     return () => unsub();
   }, [lobbyId, lobbyData?.status]);
 
-  /* keep local balance / bet mirrored with the lobby while waiting ------- */
+  /* --------------------------------- mirror balance while waiting --- */
   useEffect(() => {
     if (lobbyData?.status !== 'waiting') return;
-
     const rawBal  = lobbyData.balances?.[uid] ?? 100;
     const currBet = lobbyData.bets?.[uid]     ?? 0;
     const isReady = lobbyData.ready?.[uid];
-
     setBalance(isReady ? rawBal - currBet : rawBal);
     setBet(currBet);
-  }, [lobbyData?.status,
-      lobbyData?.balances,
-      lobbyData?.bets,
-      lobbyData?.ready,
-      uid]);
+  }, [lobbyData?.status, lobbyData?.balances,
+      lobbyData?.bets,   lobbyData?.ready]);
 
-  /* call leaveLobby if the tab/window is closed -------------------------- */
-/* beforeunload effect */
-useEffect(() => {
-  const handler = () => {
-    dlog('beforeunload fired – leaving lobby');
-    if (mode === 'multi' && lobbyId) leaveLobby(db, lobbyId, uid)
-      .then(() => dlog('leaveLobby (BL) ✓'))
-      .catch(err => console.error('leaveLobby (BL) error', err));
-  };
-  window.addEventListener('beforeunload', handler);
-  return () => window.removeEventListener('beforeunload', handler);
-}, [mode, lobbyId]);
-
-/* live snapshot effect */
-useEffect(() => {
-  if (!lobbyId || lobbyData?.status !== 'playing') {
-    setGameState(null);
-    return;
-  }
-  dlog('Subscribing to game state doc for lobby', lobbyId);
-  const unsub = onSnapshot(
-    doc(db, 'lobbies', lobbyId, 'game', 'state'),
-    snap => {
-      dlog('Game state snapshot update:', snap.exists() ? snap.data() : 'doc deleted');
-      setGameState(snap.data());
-    }
-  );
-  return () => {
-    dlog('Unsubscribing from game state doc for lobby', lobbyId);
-    unsub();
-  };
-}, [lobbyId, lobbyData?.status]);
-
-  /* ----------------------- helpers & actions --------------------------- */
+  /* ========================= helpers ================================ */
   const resetRound = () => {
-    setDealerHand([]); setPlayerHand([]);
-    setPlayerMessage('');
+    setDealerHand([]); setPlayerHand([]); setPlayerMsg('');
     setCanDouble(false); setShowActions(false);
     setBet(0); setRoundFinished(false);
   };
-
   const playDealer = (dck, dHand) => {
     while (calculateHandValue(dHand, true) < 17) dHand.push(dck.pop());
     return dHand;
   };
 
-  /* ---------- single‑player actions ---------- */
+  /* ---------------- single‑player actions --------------------------- */
   const handleHitSingle = () => {
     const newDeck = [...deck];
     const newHand = [...playerHand, newDeck.pop()];
-    setDeck(newDeck);
-    setPlayerHand(newHand);
+    setDeck(newDeck); setPlayerHand(newHand);
 
-    const total = calculateHandValue(newHand);
-    if (total === 21) { handleStandSingle(newDeck, newHand); return; }
-    if (total > 21) {
-      setPlayerMessage('Busted!');
-      setShowActions(false); setRoundFinished(true);
-      if (balance === 0) setGameOver(true);
+    const tot = calculateHandValue(newHand);
+    if (tot === 21) { handleStandSingle(newDeck, newHand); return; }
+    if (tot > 21) {
+      setPlayerMsg('Busted!'); setShowActions(false);
+      setRoundFinished(true); if (balance === 0) setGameOver(true);
     }
   };
-
   const handleStandSingle = (dck = deck, ph = playerHand) => {
-    const newDeck       = [...dck];
-    const dealerReveal  = [...dealerHand];
-    if (dealerReveal[1]?.rank === 'Hidden') dealerReveal[1] = newDeck.pop();
-
-    const dealerFinal   = playDealer(newDeck, dealerReveal);
-
-    setDeck(newDeck);
-    setDealerHand(dealerFinal);
+    const dDeck = [...dck];
+    const dReveal = [...dealerHand];
+    if (dReveal[1]?.rank === 'Hidden') dReveal[1] = dDeck.pop();
+    const dealerFinal = playDealer(dDeck, dReveal);
+    setDeck(dDeck); setDealerHand(dealerFinal);
 
     const p = calculateHandValue(ph);
     const d = calculateHandValue(dealerFinal);
-
-    if (d > 21 || p > d)            { setBalance(b => b + bet * 2); setPlayerMessage('Win!'); }
-    else if (d === p)               { setBalance(b => b + bet    ); setPlayerMessage('Push — bet returned.'); }
-    else                            { setPlayerMessage('Dealer wins.'); if (balance === 0) setGameOver(true); }
+    if (d > 21 || p > d)           { setBalance(b => b + bet * 2); setPlayerMsg('Win!'); }
+    else if (d === p)              { setBalance(b => b + bet    ); setPlayerMsg('Push — bet returned.'); }
+    else                           { setPlayerMsg('Dealer wins.'); if (balance === 0) setGameOver(true); }
 
     setShowActions(false); setRoundFinished(true);
   };
-
   const handleDoubleSingle = () => {
     if (balance < bet) return;
-    setBalance(b => b - bet);
-    setBet(bet * 2);
-    handleHitSingle();              // will draw 1
-    if (!roundFinished) handleStandSingle();
+    setBalance(b => b - bet); setBet(bet * 2);
+    handleHitSingle(); if (!roundFinished) handleStandSingle();
   };
 
-  /* ---------- shared helpers ---------- */
-  const handleAddChipBet = value => {
-    if (!showActions && balance >= value) {
-      setBet(b => b + value);
-      setBalance(b => b - value);
-    }
+  /* ---------------- shared helpers ---------------------------------- */
+  const handleAddChipBet = (v) => {
+    if (!showActions && balance >= v) { setBet(b => b + v); setBalance(b => b - v); }
   };
-
   const handleClearBet = async () => {
     if (showActions) return;
-    setBalance(b => b + bet);
-    setBet(0);
+    setBalance(b => b + bet); setBet(0);
     if (mode === 'multi' && lobbyData?.status === 'waiting') {
-      try { await setLobbyReady(false, 0); } catch (e) { console.error(e); }
+      try { await setLobbyReady(false, 0); } catch (err) { console.error(err); }
     }
   };
 
-  /* ---------- “Deal” button (single OR multi) ---------- */
+  /* ---------------- “Deal” btn -------------------------------------- */
   const handleDeal = async () => {
     if (bet === 0) return;
 
-    /* single‑player ------------------------------------------------------ */
     if (mode === 'single') {
       const newDeck = shuffleDeck(createDeck());
       const player  = [newDeck.pop(), newDeck.pop()];
       const dealer  = [newDeck.pop(), { rank: 'Hidden', suit: 'Hidden' }];
-
-      setDeck(newDeck);
-      setPlayerHand(player);
-      setDealerHand(dealer);
+      setDeck(newDeck); setPlayerHand(player); setDealerHand(dealer);
       setShowActions(true); setCanDouble(true);
 
-      const player21 = calculateHandValue(player) === 21;
-      const dealer21 = calculateHandValue([dealer[0], newDeck[newDeck.length - 1]]) === 21;
-
-      if (player21) {
+      const p21 = calculateHandValue(player) === 21;
+      const d21 = calculateHandValue([dealer[0], newDeck[newDeck.length - 1]]) === 21;
+      if (p21) {
         setShowActions(false); setRoundFinished(true);
-        if (dealer21) { setBalance(b => b + bet);       setPlayerMessage('Push — both blackjack'); }
-        else          { setBalance(b => b + bet * 2.5); setPlayerMessage('Blackjack! You win!');   }
+        if (d21) setBalance(b => b + bet), setPlayerMsg('Push — both blackjack');
+        else     setBalance(b => b + bet * 2.5), setPlayerMsg('Blackjack! You win!');
       }
       return;
     }
 
-    /* multi‑player : just mark this player “ready” with their bet -------- */
-    try {
-      await setLobbyReady(true, bet);
-    } catch (e) {
-      console.error('setLobbyReady failed', e);
-    }
+    /* multi: mark ready */
+    try { await setLobbyReady(true, bet); }
+    catch (err) { console.error('setLobbyReady failed', err); }
   };
 
-  /* ---------- lobby creation / join UI ---------- */
+  /* ---------------- lobby‑level helpers ----------------------------- */
   const handleCreateLobby = async () => { await createLobby(); setMode('multi'); };
   const handleJoinLobby   = async () => {
-    if (lobbyInput.trim()) { await joinLobby(lobbyInput.trim()); setMode('multi'); }
+    const code = lobbyInput.trim(); if (!code) return;
+    await joinLobby(code); setMode('multi');
   };
 
-  /* ---------- host‑only actions ---------- */
+  /* ---------------- host‑only --------------------------------------- */
   const allReady =
     lobbyData?.players?.length > 0 &&
     Object.values(lobbyData.ready || {}).every(Boolean);
 
-
-
-    const hostStartGame = async () => {
-      if (uid !== lobbyData.host || !allReady) return;
-      try {
-        await startGame(db, lobbyId, lobbyData);
-        console.log('Game started successfully!');
-      } catch (err) {
-        console.error('startGame failed:', err);
-      }
-    };
-    
-    
-
-  /* the host clicks after a finished round to reset everything */
+  const hostStartGame = async () => {
+    if (uid !== lobbyData.host || !allReady) return;
+    try { await startGame(db, lobbyId, lobbyData); }
+    catch (err) { console.error('startGame failed:', err); }
+  };
   const hostNewRound = async () => {
     if (uid !== lobbyData.host) return;
-
     const finalBalances =
-      (await getDoc(doc(db, 'lobbies', lobbyId, 'game', 'state'))).data()?.balances
-      || lobbyData.balances;
-
+      (await getDoc(doc(db, 'lobbies', lobbyId, 'game', 'state')))
+        .data()?.balances || lobbyData.balances;
     const ready = {}, bets = {};
     lobbyData.players.forEach(p => { ready[p] = false; bets[p] = 0; });
-
     await updateDoc(doc(db, 'lobbies', lobbyId), {
-      status: 'waiting',
-      ready,
-      bets,
-      balances: finalBalances
+      status: 'waiting', ready, bets, balances: finalBalances,
     });
-    await deleteDoc(doc(db, 'lobbies', lobbyId, 'game', 'state'));
   };
 
-  /* ---------- in‑round player actions (Hit / Stand) ---------- */
+  /* ---------------- in‑round actions (TX) --------------------------- */
   const txHit = async () => {
     const ref = doc(db, 'lobbies', lobbyId, 'game', 'state');
     await runTransaction(db, async tx => {
-      const g    = (await tx.get(ref)).data();
-      const idx  = lobbyData.players.indexOf(uid);
+      const g   = (await tx.get(ref)).data();
+      const idx = lobbyData.players.indexOf(uid);
       if (g.currentIdx !== idx) throw new Error('Not your turn');
-  
+
       g.hands[uid].push(g.deck.pop());
       const tot = calculateHandValue(g.hands[uid]);
-  
-      /* -------- bust / 21 handling -------- */
-      if (tot > 21) {
-        g.outcome[uid] = 'Busted!';
-        g.currentIdx++;
-      } else if (tot === 21) {
-        g.currentIdx++;
-      }
-  
-      /* if last active player done -> resolve dealer */
+      if (tot > 21) { g.outcome[uid] = 'Busted!'; g.currentIdx++; }
+      else if (tot === 21) g.currentIdx++;
+
       if (g.currentIdx >= lobbyData.players.length) {
         if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
         while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
-  
+
         const dealerTot = calculateHandValue(g.dealerHand);
         lobbyData.players.forEach(p => {
-          if (g.outcome[p] === 'Busted!') return;            // already bust
+          if (g.outcome[p] === 'Busted!') return;
           const ptot = calculateHandValue(g.hands[p]);
           let msg='', bal=g.balances[p];
-          if (dealerTot > 21 || ptot > dealerTot)   { msg='Win!';  bal += g.bets[p]*2; }
-          else if (ptot === dealerTot)              { msg='Push'; bal += g.bets[p];    }
-          else                                      { msg='Lose'; }
+          if (dealerTot > 21 || ptot > dealerTot) { msg='Win!';  bal += g.bets[p]*2; }
+          else if (ptot === dealerTot)            { msg='Push'; bal += g.bets[p];    }
+          else                                    { msg='Lose'; }
           g.outcome[p] = msg; g.balances[p] = bal;
         });
         g.roundFinished = true;
       }
-  
       tx.update(ref, g);
     });
   };
-
   const txStand = async () => {
     const ref = doc(db, 'lobbies', lobbyId, 'game', 'state');
     await runTransaction(db, async tx => {
-      const g    = (await tx.get(ref)).data();
-      const idx  = lobbyData.players.indexOf(uid);
+      const g   = (await tx.get(ref)).data();
+      const idx = lobbyData.players.indexOf(uid);
       if (g.currentIdx !== idx) throw new Error('Not your turn');
-
       g.currentIdx++;
 
       if (g.currentIdx >= lobbyData.players.length) {
@@ -333,55 +265,43 @@ useEffect(() => {
           if (g.outcome[p] === 'Busted!') return;
           const ptot = calculateHandValue(g.hands[p]);
           let msg='', bal=g.balances[p];
-          if (dealerTot > 21 || ptot > dealerTot)   { msg='Win!';  bal += g.bets[p]*2; }
-          else if (ptot === dealerTot)              { msg='Push'; bal += g.bets[p];    }
-          else                                      { msg='Lose'; }
+          if (dealerTot > 21 || ptot > dealerTot) { msg='Win!';  bal += g.bets[p]*2; }
+          else if (ptot === dealerTot)            { msg='Push'; bal += g.bets[p];    }
+          else                                    { msg='Lose'; }
           g.outcome[p] = msg; g.balances[p] = bal;
         });
         g.roundFinished = true;
       }
-
       tx.update(ref, g);
     });
   };
 
-  /* ---------- navigation (Menu button) ---------- */
-  const handleBackToMenu = async () => {
-    dlog('Menu clicked in mode:', mode, 'lobbyId:', lobbyId);
-    try {
-      if (mode === 'multi' && lobbyId) {
-        await leaveLobby(db, lobbyId, uid);
-        dlog('leaveLobby awaited ✓');
-      }
-    } catch (e) {
-      console.error('leaveLobby threw', e);
-    } finally {
-      setMode('menu');
-      resetRound();
-      setBalance(100); setBet(0); setGameOver(false);
-      setLobbyInput('');
+  /* ---------------- menu (full leave) ------------------------------- */
+  const backToMenu = async () => {
+    try { if (mode === 'multi' && lobbyId) await leaveLobby(db, lobbyId, uid); }
+    catch (err) { console.error(err); }
+    finally {
+      setMode('menu'); resetRound();
+      setBalance(100); setBet(0); setGameOver(false); setLobbyInput('');
     }
   };
 
-  /* =========================================================== *
-   * ====================== RENDER ============================== *
-   * =========================================================== */
-
-  if (!readyScreen) {
+  /* ============================ render ============================== */
+  if (!readyScrn) {
     return (
       <UsernameInput
         username={username}
         setUsername={setUsername}
-        onReady={() => setReadyScreen(true)}
+        onReady={() => setReadyScrn(true)}
       />
     );
   }
 
+  /* ---------- MENU ---------- */
   if (mode === 'menu') {
     return (
       <div className="table-container">
         <h1 className="title-banner">Blackjack</h1>
-
         <div className="join-container">
           <h2>Welcome, {username}!</h2>
 
@@ -404,27 +324,26 @@ useEffect(() => {
           </div>
 
           <input
-            type="text"
-            placeholder="Enter Lobby ID"
             value={lobbyInput}
             onChange={e => setLobbyInput(e.target.value)}
+            placeholder="Enter Lobby ID"
           />
         </div>
       </div>
     );
   }
 
+  /* ---------- SINGLE ---------- */
   if (mode === 'single') {
     return (
       <SinglePlayerGame
-        /* props */
-        onBack={handleBackToMenu}
+        onBack={backToMenu}
         username={username}
         balance={balance}
         bet={bet}
         dealerHand={dealerHand}
         playerHand={playerHand}
-        playerMessage={playerMessage}
+        playerMessage={playerMsg}
         canDouble={canDouble}
         showActions={showActions}
         roundFinished={roundFinished}
@@ -440,10 +359,10 @@ useEffect(() => {
     );
   }
 
-  /* mode === 'multi' ----------------------------------------------------- */
+  /* ---------- MULTI ---------- */
   return (
     <MultiPlayerGame
-      onBack={handleBackToMenu}
+      onBack={backToMenu}
       uid={uid}
       lobbyId={lobbyId}
       lobbyData={lobbyData}

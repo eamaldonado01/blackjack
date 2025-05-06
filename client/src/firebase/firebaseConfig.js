@@ -1,6 +1,7 @@
 // path: blackback/client/src/firebase.js
-import { initializeApp } from "firebase/app";
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp }  from 'firebase/app';
+import { getFirestore }   from 'firebase/firestore';
+import { getDatabase }    from 'firebase/database';
 
 
 // blackjack Firebase configuration
@@ -16,6 +17,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-export { db };
+const app   = initializeApp(firebaseConfig);
+const db    = getFirestore(app);
+const rtdb  = getDatabase(app);
+export { firebaseConfig, app, db, rtdb };

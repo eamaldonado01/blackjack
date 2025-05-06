@@ -10,9 +10,8 @@ export default function ModeSelector({ username, onSingle, onCreateLobby, onJoin
       <h3>Please select a game mode:</h3>
 
       <div className="section-spacing">
-        <h2>Play Singleplayer</h2>
         <button className="common-button" onClick={onSingle}>
-          Single Player
+          Play Single Player
         </button>
       </div>
 
