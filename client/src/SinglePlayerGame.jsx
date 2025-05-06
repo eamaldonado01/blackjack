@@ -1,21 +1,29 @@
 import React from 'react';
 import { getCardImage, calculateHandValue } from './utils/GameHelpers';
-import chip5 from './assets/chips/5.png'; import chip10 from './assets/chips/10.png';
-import chip25 from './assets/chips/25.png'; import chip50 from './assets/chips/50.png';
+import chip5 from './assets/chips/5.png';
+import chip10 from './assets/chips/10.png';
+import chip25 from './assets/chips/25.png';
+import chip50 from './assets/chips/50.png';
 import chip100 from './assets/chips/100.png';
 
-export default function SinglePlayerGame(props){
+export default function SinglePlayerGame(props) {
   const {
     onBack, username, balance, bet,
     dealerHand, playerHand, playerMessage,
     canDouble, showActions,
     handleHit, handleStand, handleDouble,
-    handleClearBet, handleDeal, handleAddChipBet,
+    handleClearBet, handleDeal, handleAddChipBet, /* <‑‑ now always defined */
     handleNewRound, gameOver, roundFinished,
   } = props;
 
   const chipImages={5:chip5,10:chip10,25:chip25,50:chip50,100:chip100};
   const playing = playerHand.length>0;
+  const dealerTotal =
+    dealerHand.length>0
+      ? (dealerHand[1]?.rank==='Hidden'
+          ? calculateHandValue([dealerHand[0]])
+          : calculateHandValue(dealerHand))
+      : 0;
 
   return(
     <div className="table-container">
@@ -32,7 +40,7 @@ export default function SinglePlayerGame(props){
 
       {playing && (
         <div className="dealer-area">
-          <h2>Dealer – {calculateHandValue(dealerHand)}</h2>
+          <h2>Dealer – {dealerTotal}</h2>
           <div className="hand-display">
             {dealerHand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card"/>)}
           </div>
@@ -72,10 +80,9 @@ export default function SinglePlayerGame(props){
         </>
       )}
 
-      {gameOver && (
+{gameOver && (
         <div className="game-over">
-          <h2>Game Over!</h2>
-          <button className="common-button" onClick={onBack}>Back to Menu</button>
+          Game Over!
         </div>
       )}
     </div>
