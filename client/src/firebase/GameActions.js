@@ -4,18 +4,22 @@ import {
   updateDoc,
   arrayRemove,
   deleteField,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import {
   ref as rtdbRef,
   remove,
   onDisconnect,
   set,
-  serverTimestamp,
+  serverTimestamp as rtdbServerTimestamp,
 } from 'firebase/database';
 import { rtdb } from './firebaseConfig';
 
 export const removePresence = async (lobbyId, uid) => {
-  const beatRef = rtdbRef(rtdb, `lobbies/${lobbyId}/${uid}`);  // adjust 'lobbies' if your root is named 'presence'
+  const beatRef = rtdbRef(rtdb, `lobbies/${lobbyId}/${uid}`);  // adjust if your path is 'presence'
   try {
     await onDisconnect(beatRef).cancel();     // cancel pending handler
   } catch (e) {
@@ -23,12 +27,39 @@ export const removePresence = async (lobbyId, uid) => {
   }
   try {
     // optional: write a tiny tombstone so the onDelete always triggers
-    await set(beatRef, { leftAt: serverTimestamp() });
+    await set(beatRef, { leftAt: rtdbServerTimestamp() });
     await remove(beatRef);
   } catch (e) {
     console.warn('Failed to remove presence:', e);
   }
 };
+
+export async function createLobby(db, lobbyData) {
+  let lobbyId;
+  let exists = true;
+  let attempt = 0;
+
+  while (exists && attempt < 10) {
+    lobbyId = Math.floor(1000 + Math.random() * 9000).toString();
+    const docRef = doc(db, 'lobbies', lobbyId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      exists = false;
+      await setDoc(docRef, {
+        ...lobbyData,
+        createdAt: serverTimestamp(),
+      });
+    } else {
+      attempt++;
+    }
+  }
+
+  if (exists) {
+    throw new Error('Failed to create a unique lobby after 10 attempts.');
+  }
+
+  return lobbyId;
+}
 
 /**
  * Starts a new game round in the specified lobby.

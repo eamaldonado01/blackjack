@@ -1,17 +1,14 @@
 /* client/src/hooks/useLobby.js */
-import { useEffect, useState, useRef }          from 'react';
-import {
-  collection, doc, onSnapshot, setDoc,
-  addDoc, updateDoc, runTransaction, deleteDoc
-}                                               from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { runTransaction, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import {
   getDatabase, ref as rtdbRef,     // alias so we don’t clash with Firestore’s ref
   onDisconnect, set as rtdbSet
 }                                               from 'firebase/database';
 import { initializeApp }                        from 'firebase/app';
 
-import { db }                                   from '../firebase/firebaseConfig';   // Firestore
-import { firebaseConfig } from '../firebase/firebaseConfig';
+import { db, firebaseConfig } from '../firebase/firebaseConfig';
+import { createLobby as createLobbyHelper } from '../firebase/GameActions';
 
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -39,7 +36,7 @@ export function setupPresence(lobbyId, uid) {
 // Lobby hook  (all the Firestore logic you already had)
 // ────────────────────────────────────────────────────────────────────────────
 export function useLobby(username, uid) {
-  const [lobbyId , setLobbyId ] = useState(null);
+  const [lobbyId, setLobbyId] = useState(null);
   const [lobbyData, setLobbyData] = useState(null);
 
   /* live listener on the lobby doc */
@@ -53,16 +50,18 @@ export function useLobby(username, uid) {
 
   /* ───────────── public helpers ───────────── */
   const createLobby = async () => {
-    const lobbyDoc = await addDoc(collection(db, 'lobbies'), {
-      host     : uid,
-      players  : [uid],
-      usernames: { [uid]: username },
-      balances : { [uid]: 100 },
-      bets     : { [uid]: 0 },
-      ready    : { [uid]: false },
-      status   : 'waiting',
+    const newLobbyId = await createLobbyHelper(db, {
+      players: [uid],
+      host: uid,
+      ready: { [uid]: false },
+      bets: { [uid]: 0 },
+      balances: { [uid]: 100 },
+      usernames: { [uid]: username || 'Player' },
+      status: 'waiting',
     });
-    setLobbyId(lobbyDoc.id);
+    setLobbyId(newLobbyId);
+    const snap = await getDoc(doc(db, 'lobbies', newLobbyId));
+    setLobbyData(snap.data());
   };
 
   const joinLobby = async code => {
@@ -83,13 +82,20 @@ export function useLobby(username, uid) {
     setLobbyId(code);
   };
 
-  const setReady = async (isReady, bet = 0) => {
+  const setReady = async (isReady, bet) => {
     if (!lobbyId) return;
-    await updateDoc(doc(db, 'lobbies', lobbyId), {
+    const docRef = doc(db, 'lobbies', lobbyId);
+    await updateDoc(docRef, {
       [`ready.${uid}`]: isReady,
-      [`bets.${uid}`] : bet,
+      [`bets.${uid}`]: bet,
     });
   };
 
-  return { lobbyId, lobbyData, createLobby, joinLobby, setReady };
+  return {
+    lobbyId,
+    lobbyData,
+    createLobby,
+    joinLobby,
+    setReady,
+  };
 }
