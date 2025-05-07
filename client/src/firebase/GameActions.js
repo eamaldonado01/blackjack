@@ -1,5 +1,34 @@
 import { createDeck, shuffleDeck, calculateHandValue } from '../utils/GameHelpers';
-import { doc, updateDoc, arrayRemove, deleteField, runTransaction} from 'firebase/firestore';
+import {
+  doc,
+  updateDoc,
+  arrayRemove,
+  deleteField,
+} from 'firebase/firestore';
+import {
+  ref as rtdbRef,
+  remove,
+  onDisconnect,
+  set,
+  serverTimestamp,
+} from 'firebase/database';
+import { rtdb } from './firebaseConfig';
+
+export const removePresence = async (lobbyId, uid) => {
+  const beatRef = rtdbRef(rtdb, `lobbies/${lobbyId}/${uid}`);  // adjust 'lobbies' if your root is named 'presence'
+  try {
+    await onDisconnect(beatRef).cancel();     // cancel pending handler
+  } catch (e) {
+    console.warn('Failed to cancel onDisconnect:', e);
+  }
+  try {
+    // optional: write a tiny tombstone so the onDelete always triggers
+    await set(beatRef, { leftAt: serverTimestamp() });
+    await remove(beatRef);
+  } catch (e) {
+    console.warn('Failed to remove presence:', e);
+  }
+};
 
 /**
  * Starts a new game round in the specified lobby.
@@ -8,6 +37,22 @@ export async function startGame(db, lobbyId, lobbyData) {
   await runTransaction(db, async tx => {
     const lobbyRef = doc(db, 'lobbies', lobbyId);
     const gameRef = doc(db, 'lobbies', lobbyId, 'game', 'state');
+
+  await updateDoc(doc(db, 'lobbies', lobbyId), {
+    players  : arrayRemove(uid),
+    ready    : deleteField(),
+    bets     : deleteField(),
+    balances : deleteField(),
+    usernames: deleteField(),
+  });
+
+
+  const beat = ref(rtdb, `/presence/${lobbyId}/${uid}`);
+  // cancel the still‑armed onDisconnect
+  await onDisconnect(beat).cancel();
+  // tiny “tombstone” write to guarantee siblings see the delete
+  await set(beat, { leftAt: serverTimestamp() });
+   await remove(beat);
 
     const lobbySnap = await tx.get(lobbyRef);
     if (!lobbySnap.exists()) throw new Error('Lobby does not exist');
@@ -72,6 +117,21 @@ export async function startGame(db, lobbyId, lobbyData) {
  */
 /* — excerpt of leaveLobby only — */
 export async function leaveLobby(db, lobbyId, uid) {
+
+  try {
+    await updateDoc(doc(db, 'lobbies', lobbyId), {
+      players: arrayRemove(uid),
+      [`ready.${uid}`]: deleteField(),
+      [`bets.${uid}`]: deleteField(),
+      [`balances.${uid}`]: deleteField(),
+      [`usernames.${uid}`]: deleteField(),
+    });
+  } catch (e) {
+    console.error('Failed Firestore leaveLobby:', e);
+  }
+
+  await removePresence(lobbyId, uid);
+
     await runTransaction(db, async tx => {
       const lobbyRef = doc(db, 'lobbies', lobbyId);
       const gameRef  = doc(db, 'lobbies', lobbyId, 'game', 'state');
@@ -139,15 +199,22 @@ export async function leaveLobby(db, lobbyId, uid) {
   }
 
   export async function quickLeaveLobby(db, lobbyId, uid) {
-    const lobbyRef = doc(db, 'lobbies', lobbyId);
     try {
-      await updateDoc(lobbyRef, {
+      await updateDoc(doc(db, 'lobbies', lobbyId), {
         players: arrayRemove(uid),
-        [`ready.${uid}`]:     deleteField(),
-        [`bets.${uid}`]:      deleteField(),
-        [`balances.${uid}`]:  deleteField(),
+        [`ready.${uid}`]: deleteField(),
+        [`bets.${uid}`]: deleteField(),
+        [`balances.${uid}`]: deleteField(),
         [`usernames.${uid}`]: deleteField(),
       });
-    } catch (_) { /* best‑effort */ }
+    } catch (e) {
+      console.warn('quickLeaveLobby Firestore error:', e);
+    }
+  
+    try {
+      await removePresence(lobbyId, uid);
+    } catch (e) {
+      console.warn('quickLeaveLobby RTDB error:', e);
+    }
   }
   

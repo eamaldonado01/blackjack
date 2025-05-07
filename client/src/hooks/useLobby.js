@@ -20,6 +20,10 @@ import { firebaseConfig } from '../firebase/firebaseConfig';
 const rtdbApp  = initializeApp(firebaseConfig, 'presence');
 const rtdb     = getDatabase(rtdbApp);
 
+const PRESENCE_ROOT = 'lobbies';   // or 'presence'
+
+
+
 /** Register a heartbeat node under `/lobbies/$lobbyId/$uid` that is removed
  *  by the backend when the websocket closes (tab refresh, close, connection drop).
  */
