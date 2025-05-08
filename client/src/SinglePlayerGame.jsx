@@ -12,7 +12,7 @@ export default function SinglePlayerGame(props) {
     dealerHand, playerHand, playerMessage,
     canDouble, showActions,
     handleHit, handleStand, handleDouble,
-    handleClearBet, handleDeal, handleAddChipBet, /* <‑‑ now always defined */
+    handleClearBet, handleDeal, handleAddChipBet,
     handleNewRound, gameOver, roundFinished,
   } = props;
 
@@ -80,7 +80,7 @@ export default function SinglePlayerGame(props) {
         </>
       )}
 
-{gameOver && (
+      {gameOver && (
         <div className="game-over">
           Game Over!
         </div>

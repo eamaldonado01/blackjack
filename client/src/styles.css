@@ -81,7 +81,7 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 1.3rem;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
   padding: 28px 38px;
   border-radius: 12px;
   text-align: center;
@@ -114,7 +114,7 @@ body {
 /* Menu block (LEFT side) */
 .menu-block {
   font-size: 1.3rem;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
   padding: 28px 38px;
   border-radius: 12px;
   text-align: center;
@@ -139,10 +139,10 @@ body {
 
 /* Leaderboard block (RIGHT side) */
 .leaderboard {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
   padding: 28px 38px;
   border-radius: 12px;
-  text-align: center;
+  text-align: left;
   min-width: 280px;
   box-sizing: border-box;
 }
@@ -158,6 +158,11 @@ body {
 .leaderboard li {
   font-size: 1.3rem; /* ✅ match Welcome */
   margin: 10px 0;
+}
+
+.rank-span {
+  display: inline-block;
+  width: 2.5em; /* or 3em if needed */
 }
 
 /* ✅ leaderboard medal colors */

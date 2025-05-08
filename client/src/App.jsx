@@ -1,4 +1,4 @@
-/* src/App.jsx */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 
@@ -29,18 +29,19 @@ import {
 
 import './styles.css';
 
+/* --------------------------- constants ---------------------------- */
 const DBG  = true;
 const dlog = (...a) => DBG && console.log('[App]', ...a);
 const uid  = nanoid(8);
 
-/* ===================================================================== */
+/* ================================================================= */
 export default function App() {
-  /* ------------- generic -------------------------------------------- */
+  /* ------------------------- generic UI --------------------------- */
   const [username , setUsername ] = useState('');
   const [readyScrn , setReadyScrn] = useState(false);
   const [mode     , setMode     ] = useState('menu');   // menu | single | multi
 
-  /* ------------- local betting / round ------------------------------ */
+  /* -------------------- local (single‑player) state --------------- */
   const [balance     , setBalance     ] = useState(100);
   const [bet         , setBet         ] = useState(0);
   const [dealerHand  , setDealerHand  ] = useState([]);
@@ -54,7 +55,7 @@ export default function App() {
 
   const [lobbyInput  , setLobbyInput  ] = useState('');
 
-  /* ------------- lobby hook ----------------------------------------- */
+  /* -------------------------- lobby hook -------------------------- */
   const {
     lobbyId,
     lobbyData,
@@ -63,7 +64,7 @@ export default function App() {
     setReady: setLobbyReady,
   } = useLobby(username, uid);
 
-  /* --------------------------------------------------------- presence */
+  /* --------------------------- presence --------------------------- */
   const presenceSet = useRef(false);
   useEffect(() => {
     if (mode === 'multi' && lobbyId && !presenceSet.current) {
@@ -73,7 +74,7 @@ export default function App() {
     if (mode !== 'multi') presenceSet.current = false;
   }, [mode, lobbyId]);
 
-  /* -------------------------------------------------- quick leave ... */
+  /* ---------------- leave / refresh safety for multiplayer -------- */
   useEffect(() => {
     if (mode !== 'multi' || !lobbyId) return;
     const bye = () => { try { quickLeaveLobby(db, lobbyId, uid); } catch {} };
@@ -85,7 +86,7 @@ export default function App() {
     };
   }, [mode, lobbyId]);
 
-  /* ---------------------------------------------- live game snapshot */
+  /* -------------------- live in‑round snapshot -------------------- */
   const [gameState, setGameState] = useState(null);
   useEffect(() => {
     if (!lobbyId || lobbyData?.status !== 'playing') { setGameState(null); return; }
@@ -96,15 +97,15 @@ export default function App() {
     return () => unsub();
   }, [lobbyId, lobbyData?.status]);
 
-    /* ---------- sync local balance after multi‑player rounds ---------- */
-    useEffect(() => {
-      if (gameState?.balances && gameState.roundFinished) {
-        const newBal = gameState.balances[uid];
-        if (newBal !== undefined && newBal !== balance) setBalance(newBal);
-      }
-    }, [gameState]);   // eslint-disable-line react-hooks/exhaustive-deps
+  /* ------- sync local balance after completed MP rounds ----------- */
+  useEffect(() => {
+    if (gameState?.balances && gameState.roundFinished) {
+      const newBal = gameState.balances[uid];
+      if (newBal !== undefined && newBal !== balance) setBalance(newBal);
+    }
+  }, [gameState]);
 
-  /* --------------------------------- mirror balance while waiting --- */
+  /* ------------ mirror balance while waiting in lobby ------------- */
   useEffect(() => {
     if (lobbyData?.status !== 'waiting') return;
     const rawBal  = lobbyData.balances?.[uid] ?? 100;
@@ -115,12 +116,10 @@ export default function App() {
   }, [lobbyData?.status, lobbyData?.balances,
       lobbyData?.bets,   lobbyData?.ready]);
 
-       /* ---------- write any *new* high‑score to Firestore -------------- */
-    useEffect(() => {
-      if (username) updateLeaderboard(uid, username, balance);
-    }, [balance]);  // eslint-disable-line react-hooks/exhaustive-deps
+  /* --------------- write high‑score to leaderboard ---------------- */
+  useEffect(() => { if (username) updateLeaderboard(uid, username, balance); }, [balance]);
 
-  /* ========================= helpers ================================ */
+  /* ======================= single‑player ========================= */
   const resetRound = () => {
     setDealerHand([]); setPlayerHand([]); setPlayerMsg('');
     setCanDouble(false); setShowActions(false);
@@ -131,11 +130,11 @@ export default function App() {
     return dHand;
   };
 
-  /* ---------------- single‑player actions --------------------------- */
   const handleHitSingle = () => {
     const newDeck = [...deck];
     const newHand = [...playerHand, newDeck.pop()];
     setDeck(newDeck); setPlayerHand(newHand);
+    setCanDouble(false);                 // <-- cannot double after first action
 
     const tot = calculateHandValue(newHand);
     if (tot === 21) { handleStandSingle(newDeck, newHand); return; }
@@ -145,6 +144,7 @@ export default function App() {
     }
   };
   const handleStandSingle = (dck = deck, ph = playerHand) => {
+    setCanDouble(false);
     const dDeck = [...dck];
     const dReveal = [...dealerHand];
     if (dReveal[1]?.rank === 'Hidden') dReveal[1] = dDeck.pop();
@@ -160,13 +160,15 @@ export default function App() {
     setShowActions(false); setRoundFinished(true);
   };
   const handleDoubleSingle = () => {
-    if (balance < bet) return;
+    if (!canDouble || balance < bet) return;
+    setCanDouble(false);
     setBalance(b => b - bet); setBet(bet * 2);
-    handleHitSingle(); if (!roundFinished) handleStandSingle();
+    handleHitSingle();                       // one card
+    if (!roundFinished) handleStandSingle(); // auto‑stand if not busted
   };
 
-  /* ---------------- shared helpers ---------------------------------- */
-  const handleAddChipBet = (v) => {
+  /* ===================== single/shared helpers ==================== */
+  const handleAddChipBet = v => {
     if (!showActions && balance >= v) { setBet(b => b + v); setBalance(b => b - v); }
   };
   const handleClearBet = async () => {
@@ -177,10 +179,11 @@ export default function App() {
     }
   };
 
-  /* ---------------- “Deal” btn -------------------------------------- */
+  /* ------------------------- “Deal” btn --------------------------- */
   const handleDeal = async () => {
     if (bet === 0) return;
 
+    /* -------- single‑player -------- */
     if (mode === 'single') {
       const newDeck = shuffleDeck(createDeck());
       const player  = [newDeck.pop(), newDeck.pop()];
@@ -191,26 +194,26 @@ export default function App() {
       const p21 = calculateHandValue(player) === 21;
       const d21 = calculateHandValue([dealer[0], newDeck[newDeck.length - 1]]) === 21;
       if (p21) {
-        setShowActions(false); setRoundFinished(true);
+        setShowActions(false); setRoundFinished(true); setCanDouble(false);
         if (d21) setBalance(b => b + bet), setPlayerMsg('Push — both blackjack');
         else     setBalance(b => b + bet * 2.5), setPlayerMsg('Blackjack! You win!');
       }
       return;
     }
 
-    /* multi: mark ready */
+    /* -------- multiplayer: mark player ready -------- */
     try { await setLobbyReady(true, bet); }
     catch (err) { console.error('setLobbyReady failed', err); }
   };
 
-  /* ---------------- lobby‑level helpers ----------------------------- */
+  /* -------------------- lobby helpers ----------------------------- */
   const handleCreateLobby = async () => { await createLobby(); setMode('multi'); };
   const handleJoinLobby   = async () => {
     const code = lobbyInput.trim(); if (!code) return;
     await joinLobby(code); setMode('multi');
   };
 
-  /* ---------------- host‑only --------------------------------------- */
+  /* ---------------------- host controls --------------------------- */
   const allReady =
     lobbyData?.players?.length > 0 &&
     Object.values(lobbyData.ready || {}).every(Boolean);
@@ -232,7 +235,7 @@ export default function App() {
     });
   };
 
-  /* ---------------- in‑round actions (TX) --------------------------- */
+  /* ========================= MP actions =========================== */
   const txHit = async () => {
     const ref = doc(db, 'lobbies', lobbyId, 'game', 'state');
     await runTransaction(db, async tx => {
@@ -242,9 +245,11 @@ export default function App() {
 
       g.hands[uid].push(g.deck.pop());
       const tot = calculateHandValue(g.hands[uid]);
-      if (tot > 21) { g.outcome[uid] = 'Busted!'; g.currentIdx++; }
-      else if (tot === 21) g.currentIdx++;
+      if (tot > 21 || tot === 21) g.currentIdx++;    // auto‑advance on bust or 21
 
+      if (tot > 21) g.outcome[uid] = 'Busted!';
+
+      /* -------- dealer / settle if last player -------- */
       if (g.currentIdx >= lobbyData.players.length) {
         if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
         while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
@@ -264,14 +269,17 @@ export default function App() {
       tx.update(ref, g);
     });
   };
+
   const txStand = async () => {
     const ref = doc(db, 'lobbies', lobbyId, 'game', 'state');
     await runTransaction(db, async tx => {
       const g   = (await tx.get(ref)).data();
       const idx = lobbyData.players.indexOf(uid);
       if (g.currentIdx !== idx) throw new Error('Not your turn');
+
       g.currentIdx++;
 
+      /* -------- dealer / settle if last player -------- */
       if (g.currentIdx >= lobbyData.players.length) {
         if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
         while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
@@ -292,7 +300,50 @@ export default function App() {
     });
   };
 
-  /* ---------------- menu (full leave) ------------------------------- */
+  /* -------------------- Double (multiplayer) ---------------------- */
+  const txDouble = async () => {
+    const ref = doc(db, 'lobbies', lobbyId, 'game', 'state');
+    await runTransaction(db, async tx => {
+      const g   = (await tx.get(ref)).data();
+      const idx = lobbyData.players.indexOf(uid);
+      if (g.currentIdx !== idx) throw new Error('Not your turn');
+
+      /* eligibility checks */
+      if ((g.hands[uid] ?? []).length !== 2) throw new Error('Can only double on first action');
+      if (g.balances[uid] < g.bets[uid])      throw new Error('Insufficient balance');
+
+      /* perform double */
+      g.balances[uid] -= g.bets[uid];
+      g.bets[uid]     *= 2;
+      g.hands[uid].push(g.deck.pop());
+
+      const tot = calculateHandValue(g.hands[uid]);
+      if (tot > 21) g.outcome[uid] = 'Busted!';
+
+      g.currentIdx++;          // player automatically stands after doubling
+
+      /* dealer / settle if last player */
+      if (g.currentIdx >= lobbyData.players.length) {
+        if (g.dealerHand[1].rank === 'Hidden') g.dealerHand[1] = g.deck.pop();
+        while (calculateHandValue(g.dealerHand, true) < 17) g.dealerHand.push(g.deck.pop());
+
+        const dealerTot = calculateHandValue(g.dealerHand);
+        lobbyData.players.forEach(p => {
+          if (g.outcome[p] === 'Busted!') return;
+          const ptot = calculateHandValue(g.hands[p]);
+          let msg='', bal=g.balances[p];
+          if (dealerTot > 21 || ptot > dealerTot) { msg='Win!';  bal += g.bets[p]*2; }
+          else if (ptot === dealerTot)            { msg='Push'; bal += g.bets[p];    }
+          else                                    { msg='Lose'; }
+          g.outcome[p] = msg; g.balances[p] = bal;
+        });
+        g.roundFinished = true;
+      }
+      tx.update(ref, g);
+    });
+  };
+
+  /* ----------------------- full leave ----------------------------- */
   const backToMenu = async () => {
     try { if (mode === 'multi' && lobbyId) await leaveLobby(db, lobbyId, uid); }
     catch (err) { console.error(err); }
@@ -302,7 +353,7 @@ export default function App() {
     }
   };
 
-  /* ============================ render ============================== */
+  /* ============================= UI =============================== */
   if (!readyScrn) {
     return (
       <UsernameInput
@@ -313,53 +364,52 @@ export default function App() {
     );
   }
 
-  /* ---------- MENU ---------- */
+  /* ------------------------------- MENU --------------------------- */
   if (mode === 'menu') {
     return (
       <div className="table-container">
         <h1 className="title-banner">Blackjack</h1>
 
-        <div className="menu-row">{/* ← flex container holds menu + leaderboard */}
+        <div className="menu-row">
           {/* ---------- MENU BLOCK ---------- */}
           <div className="menu-screen-wrapper">
-          <div className="menu-block">
+            <div className="menu-block">
+              <h2>Welcome, {username}!</h2>
 
-            <h2>Welcome, {username}!</h2>
-
-            <p>Play Single‑player</p>
-            <button
-              className="common-button"
-              onClick={() => { resetRound(); setGameOver(false); setMode('single'); }}
-            >
-              Single Player
-            </button>
-
-            <p className="section-spacing">Play Multiplayer</p>
-            <div className="mp-buttons-row">
-              <button className="common-button" onClick={handleCreateLobby}>
-                Create New Lobby
+              <p>Play Single‑player</p>
+              <button
+                className="common-button"
+                onClick={() => { resetRound(); setGameOver(false); setMode('single'); }}
+              >
+                Single Player
               </button>
-              <button className="common-button" onClick={handleJoinLobby}>
-                Join Existing Lobby
-              </button>
+
+              <p className="section-spacing">Play Multiplayer</p>
+              <div className="mp-buttons-row">
+                <button className="common-button" onClick={handleCreateLobby}>
+                  Create New Lobby
+                </button>
+                <button className="common-button" onClick={handleJoinLobby}>
+                  Join Existing Lobby
+                </button>
+              </div>
+
+              <input
+                value={lobbyInput}
+                onChange={e => setLobbyInput(e.target.value)}
+                placeholder="Enter Lobby ID"
+              />
             </div>
 
-            <input
-              value={lobbyInput}
-              onChange={e => setLobbyInput(e.target.value)}
-              placeholder="Enter Lobby ID"
-            />
-          </div>
-
-          {/* ---------- LEADERBOARD BLOCK ---------- */}
-          <Leaderboard />
+            {/* ---------- LEADERBOARD BLOCK ---------- */}
+            <Leaderboard />
           </div>
         </div>
       </div>
     );
   }
 
-  /* ---------- SINGLE ---------- */
+  /* -------------------------- SINGLE‑PLAYER ----------------------- */
   if (mode === 'single') {
     return (
       <SinglePlayerGame
@@ -385,7 +435,7 @@ export default function App() {
     );
   }
 
-  /* ---------- MULTI ---------- */
+  /* ------------------------- MULTI‑PLAYER ------------------------ */
   return (
     <MultiPlayerGame
       onBack={backToMenu}
@@ -402,6 +452,7 @@ export default function App() {
       gameState={gameState}
       handleHit={txHit}
       handleStand={txStand}
+      handleDouble={txDouble}
       hostNewRound={hostNewRound}
     />
   );

@@ -13,6 +13,7 @@ export default function UsernameInput({ username, setUsername, onReady }) {
     type="text"
     placeholder="Username..."
     value={username}
+    maxLength={12}
     onChange={(e) => setUsername(e.target.value)}
   />
 </div>

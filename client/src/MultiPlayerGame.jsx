@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { getCardImage, calculateHandValue } from './utils/GameHelpers';
 import chip5   from './assets/chips/5.png';
 import chip10  from './assets/chips/10.png';
@@ -11,7 +11,7 @@ export default function MultiPlayerGame({
   balance, bet,                 /* ← live local figures for chip clicks */
   allReady, hostStartGame,
   handleAddChipBet, handleClearBet, handleDeal,
-  gameState, handleHit, handleStand, hostNewRound,
+  gameState, handleHit, handleStand, handleDouble, hostNewRound,
 }) {
   const chips = {5:chip5,10:chip10,25:chip25,50:chip50,100:chip100};
 
@@ -23,13 +23,13 @@ export default function MultiPlayerGame({
    * ===================   WAITING ROOM   ====================== *
    * =========================================================== */
   if (!gameState) {
-    const ready        = lobbyData.ready?.[uid];
-    const lobbyBal     = lobbyData.balances?.[uid] ?? 100;
-    const lobbyBet     = lobbyData.bets?.[uid]     ?? 0;
+    const ready      = lobbyData.ready?.[uid];
+    const lobbyBal   = lobbyData.balances?.[uid] ?? 100;
+    const lobbyBet   = lobbyData.bets?.[uid]     ?? 0;
 
     /* show **live** local numbers while the player is still editing bet */
-    const displayBal   = ready ? lobbyBal - lobbyBet : balance;
-    const displayBet   = ready ? lobbyBet            : bet;
+    const displayBal = ready ? lobbyBal - lobbyBet : balance;
+    const displayBet = ready ? lobbyBet            : bet;
 
     return (
       <div className="table-container">
@@ -38,24 +38,34 @@ export default function MultiPlayerGame({
         <div className="lobby-banner">{`Lobby ID: ${lobbyId}`}</div>
 
         <div className="waiting-list-container">
-          <ul className="player-list">
-            {lobbyData.players.map(pid => (
-              <li key={pid}>
-                {pid === lobbyData.host && '👑 '}
-                {lobbyData.usernames?.[pid] || 'Player'} —&nbsp;
-                <span style={{color:lobbyData.ready?.[pid] ? '#0f0' : '#f44'}}>
-                  {lobbyData.ready?.[pid] ? 'Ready' : 'Not ready'}
-                </span>
-              </li>
-            ))}
-          </ul>
+  <ul className="player-list">
+    {lobbyData.players.map(pid => {
+      const username = lobbyData.usernames?.[pid] || 'Player';
+      const balance  = lobbyData.balances?.[pid] ?? 100;
+      const betAmt   = lobbyData.bets?.[pid] ?? 0;
+      const isBetting = betAmt > 0;
 
-          {uid === lobbyData.host && allReady && (
-            <button className="common-button host-start-btn" onClick={hostStartGame}>
-              Start Game
-            </button>
-          )}
-        </div>
+      const displayBal = isBetting ? (balance - betAmt) : balance;
+      const statusText = isBetting
+        ? `Betting $${betAmt}`
+        : 'Not Ready';
+
+      return (
+        <li key={pid}>
+          {pid === lobbyData.host && '👑 '}
+          {username} — ${displayBal} — {statusText}
+        </li>
+      );
+    })}
+  </ul>
+
+  {uid === lobbyData.host && allReady && (
+    <button className="common-button host-start-btn" onClick={hostStartGame}>
+      Start Game
+    </button>
+  )}
+</div>
+
 
         <div className="balance-section">
           <div>Balance: ${displayBal}</div>
@@ -94,6 +104,19 @@ export default function MultiPlayerGame({
     Math.min(gameState.currentIdx, lobbyData.players.length - 1)
   ];
   const isMyTurn   = currentUid === uid && !gameState.roundFinished;
+  const myHand     = gameState.hands[uid] ?? [];
+
+  /* -------------- auto‑skip if I already have blackjack ----------- */
+  useEffect(() => {
+    if (isMyTurn && myHand.length === 2 && calculateHandValue(myHand) === 21) {
+      handleStand();   // silently advance turn
+    }
+  }, [isMyTurn, myHand, handleStand]);
+
+  const allowDouble =
+    isMyTurn &&
+    myHand.length === 2 &&
+    gameState.balances[uid] >= gameState.bets[uid];
 
   return (
     <div className="table-container">
@@ -121,32 +144,33 @@ export default function MultiPlayerGame({
 
       {/* --------- Players ---------- */}
       <div className="mp-players-row">
-  {[...lobbyData.players].reverse().map(pid => {
-    const hand = gameState.hands[pid] ?? [];      // <-- safe‑guard
-    if (hand.length === 0) return null;           // skip if no hand yet
-    return (
-      <div className="mp-player-area" key={pid}>
-        <div className="hand-display">
-          {hand.map((c,i)=>(
-            <img key={i} src={getCardImage(c)} className="card-image" alt="card"/>
-          ))}
-        </div>
-        <h3 className="player-name">
-          {lobbyData.usernames[pid]} – {calculateHandValue(hand)}
-        </h3>
-        {gameState.outcome[pid] && (
-          <p className="player-result">{gameState.outcome[pid]}</p>
-        )}
+        {[...lobbyData.players].reverse().map(pid => {
+          const hand = gameState.hands[pid] ?? [];
+          if (hand.length === 0) return null;
+          return (
+            <div className="mp-player-area" key={pid}>
+              <div className="hand-display">
+                {hand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card"/>)}
+              </div>
+              <h3 className="player-name">
+                {lobbyData.usernames[pid]} – {calculateHandValue(hand)}
+              </h3>
+              {gameState.outcome[pid] && (
+                <p className="player-result">{gameState.outcome[pid]}</p>
+              )}
+            </div>
+          );
+        })}
       </div>
-    );
-  })}
-</div>
 
       {/* --------- Action Buttons ---------- */}
       {isMyTurn && (
         <div className="action-buttons">
           <button className="common-button" onClick={handleHit}>Hit</button>
           <button className="common-button" onClick={handleStand}>Stand</button>
+          {allowDouble && (
+            <button className="common-button" onClick={handleDouble}>Double</button>
+          )}
         </div>
       )}
 

@@ -1,24 +1,43 @@
-import { doc, runTransaction } from 'firebase/firestore';
 import { db } from './firebaseConfig';
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  query,
+  orderBy,
+} from 'firebase/firestore';
 
-/**
- * Write the user’s best‑ever balance to the “leaderboard” collection.
- * If they already have an entry, only overwrites when the new balance is higher.
- */
-export const updateLeaderboard = async (uid, username, balance) => {
-  if (!uid || !username) return;          // nothing to do
+export async function updateLeaderboard(uid, username, balance) {
+  const leaderboardRef = collection(db, 'leaderboard');
+  const userRef = doc(leaderboardRef, uid);
 
-  const ref = doc(db, 'leaderboard', uid);
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const prev = snap.exists() ? snap.data().balance : 0;
+  // 🔍 Check existing score first
+  const existingSnap = await getDoc(userRef);
+  const existingData = existingSnap.exists() ? existingSnap.data() : null;
 
-      if (balance > prev) {
-        tx.set(ref, { username, balance });   // ← overwrite with new high‑score
-      }
-    });
-  } catch (err) {
-    console.error('updateLeaderboard failed:', err);
+  const existingBalance = existingData?.balance ?? 0;
+
+  // ✅ Only update if new balance is higher than their old score
+  if (balance > existingBalance) {
+    await setDoc(userRef, { username, balance });
   }
-};
+
+  // 🧹 Fetch all and prune outside top 10
+  const q = query(leaderboardRef, orderBy('balance', 'desc'));
+  const snapshot = await getDocs(q);
+
+  const docs = [];
+  snapshot.forEach(docSnap => {
+    docs.push({ id: docSnap.id, ...docSnap.data() });
+  });
+
+  const toRemove = docs.slice(10);
+  const deletePromises = toRemove.map(item =>
+    deleteDoc(doc(leaderboardRef, item.id))
+  );
+
+  await Promise.all(deletePromises);
+}
