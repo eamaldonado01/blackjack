@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import SinglePlayerGame from './SinglePlayerGame';
 import MultiPlayerGame  from './MultiPlayerGame';
 import UsernameInput    from './components/UsernameInput';
+import Leaderboard      from './components/Leaderboard';
 import { useLobby, setupPresence } from './hooks/useLobby';
 
 import {
@@ -12,6 +13,8 @@ import {
   leaveLobby,
   quickLeaveLobby,
 } from './firebase/GameActions';
+
+import { updateLeaderboard } from './firebase/LeaderboardActions';
 
 import { db } from './firebase/firebaseConfig';
 import {
@@ -93,6 +96,14 @@ export default function App() {
     return () => unsub();
   }, [lobbyId, lobbyData?.status]);
 
+    /* ---------- sync local balance after multi‑player rounds ---------- */
+    useEffect(() => {
+      if (gameState?.balances && gameState.roundFinished) {
+        const newBal = gameState.balances[uid];
+        if (newBal !== undefined && newBal !== balance) setBalance(newBal);
+      }
+    }, [gameState]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   /* --------------------------------- mirror balance while waiting --- */
   useEffect(() => {
     if (lobbyData?.status !== 'waiting') return;
@@ -103,6 +114,11 @@ export default function App() {
     setBet(currBet);
   }, [lobbyData?.status, lobbyData?.balances,
       lobbyData?.bets,   lobbyData?.ready]);
+
+       /* ---------- write any *new* high‑score to Firestore -------------- */
+    useEffect(() => {
+      if (username) updateLeaderboard(uid, username, balance);
+    }, [balance]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ========================= helpers ================================ */
   const resetRound = () => {
@@ -302,32 +318,42 @@ export default function App() {
     return (
       <div className="table-container">
         <h1 className="title-banner">Blackjack</h1>
-        <div className="join-container">
-          <h2>Welcome, {username}!</h2>
 
-          <p>Play Single‑player</p>
-          <button
-            className="common-button"
-            onClick={() => { resetRound(); setGameOver(false); setMode('single'); }}
-          >
-            Single Player
-          </button>
+        <div className="menu-row">{/* ← flex container holds menu + leaderboard */}
+          {/* ---------- MENU BLOCK ---------- */}
+          <div className="menu-screen-wrapper">
+          <div className="menu-block">
 
-          <p className="section-spacing">Play Multiplayer</p>
-          <div className="mp-buttons-row">
-            <button className="common-button" onClick={handleCreateLobby}>
-              Create New Lobby
+            <h2>Welcome, {username}!</h2>
+
+            <p>Play Single‑player</p>
+            <button
+              className="common-button"
+              onClick={() => { resetRound(); setGameOver(false); setMode('single'); }}
+            >
+              Single Player
             </button>
-            <button className="common-button" onClick={handleJoinLobby}>
-              Join Existing Lobby
-            </button>
+
+            <p className="section-spacing">Play Multiplayer</p>
+            <div className="mp-buttons-row">
+              <button className="common-button" onClick={handleCreateLobby}>
+                Create New Lobby
+              </button>
+              <button className="common-button" onClick={handleJoinLobby}>
+                Join Existing Lobby
+              </button>
+            </div>
+
+            <input
+              value={lobbyInput}
+              onChange={e => setLobbyInput(e.target.value)}
+              placeholder="Enter Lobby ID"
+            />
           </div>
 
-          <input
-            value={lobbyInput}
-            onChange={e => setLobbyInput(e.target.value)}
-            placeholder="Enter Lobby ID"
-          />
+          {/* ---------- LEADERBOARD BLOCK ---------- */}
+          <Leaderboard />
+          </div>
         </div>
       </div>
     );

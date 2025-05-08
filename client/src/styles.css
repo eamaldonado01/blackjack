@@ -1,11 +1,11 @@
-/* ===========  GLOBAL  =================================================== */
+/* ======================================================================= */
+/* ========== GLOBAL STYLES ============================================= */
 body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
   background: #2c2c2c;
   color: #fff;
 }
-
 .common-button {
   font-size: 1.5rem;
   background: rgba(0, 0, 0, 0.5);
@@ -15,15 +15,12 @@ body {
   color: #fff;
   cursor: pointer;
 }
-.common-button:hover { background: rgba(0, 0, 0, 0.7); }
-
-.center‑block {
-  margin-left: auto;
-  margin-right: auto;
-  display: block;
+.common-button:hover {
+  background: rgba(0, 0, 0, 0.7);
 }
 
-/* ===========  TITLE  ==================================================== */
+/* ======================================================================= */
+/* ========== TITLE (Blackjack header) ================================== */
 .title-banner {
   position: absolute;
   top: 2%;
@@ -34,45 +31,50 @@ body {
   z-index: 10;
 }
 
-/* ===========  NAVIGATION ================================================ */
+/* ======================================================================= */
+/* ========== BACK BUTTON & LOBBY ID DISPLAY ============================ */
 .back-button {
   position: absolute;
   top: 20px;
   left: 20px;
   z-index: 10;
 }
-.lobby-banner {                 /* gap now equals balance‑box gap (8 px) */
+.lobby-banner {
   position: absolute;
-  top: 72px;                    /* 20px + ~44px button + 8px gap */
+  top: 72px;
   left: 20px;
   font-size: 1.3rem;
-  background: rgba(0,0,0,.5);
+  background: rgba(0, 0, 0, 0.5);
   padding: 6px 12px;
   border-radius: 8px;
   color: #fff;
   z-index: 9;
 }
 
-/* ===========  READY / USERNAME INPUT ==================================== */
+/* ======================================================================= */
+/* ========== USERNAME SCREEN (username entry form) ===================== */
 .username-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-top: 28vh;
 }
-.username-container input{
-  width:260px;height:52px;font-size:1.4rem;border-radius:8px;border:none;padding:8px 12px;
+.username-container input {
+  width: 260px;
+  height: 52px;
+  font-size: 1.4rem;
+  border-radius: 8px;
+  border: none;
+  padding: 8px 12px;
 }
-/* === Ready button wrapper (below username card) === */
 .ready-wrapper {
   position: absolute;
-  top: calc(55% + 140px);  /* 50% + height of join-container + margin */
+  top: calc(50% + 140px);  /* 50% + height of join-container + margin */
   left: 50%;
   transform: translate(-50%, 0);
-}
+ } 
 
-
-/* ===========  MENU PANEL ================================================ */
+/* Username block panel */
 .join-container {
   position: absolute;
   top: 50%;
@@ -93,6 +95,41 @@ body {
   border: none;
   margin-top: 14px;
 }
+
+/* ======================================================================= */
+/* ========== MENU SCREEN (menu + leaderboard) ========================== */
+.menu-screen-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center; /* centers vertically */
+  gap: 80px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  height: 100vh; /* fill the full screen height */
+  box-sizing: border-box;
+}
+
+
+/* Menu block (LEFT side) */
+.menu-block {
+  font-size: 1.3rem;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 28px 38px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 280px;
+  box-sizing: border-box;
+}
+.menu-block input {
+  width: 160px;
+  height: 48px;
+  font-size: 1.3rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  margin-top: 14px;
+}
 .mp-buttons-row {
   display: flex;
   gap: 20px;
@@ -100,7 +137,42 @@ body {
   margin-bottom: 12px;
 }
 
-/* ===========  WAITING ROOM PLAYER LIST ================================== */
+/* Leaderboard block (RIGHT side) */
+.leaderboard {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 28px 38px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 280px;
+  box-sizing: border-box;
+}
+.leaderboard h2 {
+  font-size: 1.3rem; /* ✅ match Welcome */
+  margin-bottom: 16px;
+}
+.leaderboard ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.leaderboard li {
+  font-size: 1.3rem; /* ✅ match Welcome */
+  margin: 10px 0;
+}
+
+/* ✅ leaderboard medal colors */
+.leaderboard li:nth-child(1) {
+  color: gold;
+}
+.leaderboard li:nth-child(2) {
+  color: silver;
+}
+.leaderboard li:nth-child(3) {
+  color: #cd7f32; /* bronze */
+}
+
+/* ======================================================================= */
+/* ========== LOBBY WAITING ROOM ======================================== */
 .waiting-list-container {
   position: absolute;
   top: 50%;
@@ -109,16 +181,30 @@ body {
   width: 90%;
   text-align: center;
 }
-.waiting-list-container .player-list{list-style:none;padding:0;margin:0 auto;font-size:3.2rem;}
-.waiting-list-container .player-list li{font-size:2.7rem;margin:14px 0;}
+.waiting-list-container .player-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  font-size: 3.2rem;
+}
 .waiting-list-container .player-list li {
   font-size: 2.7rem;
   margin: 14px 0;
 }
-/* start‑game button now always sits beneath the usernames */
-.host-start-btn{display:block!important;position:static!important;margin:2.8rem auto 0!important;}
+.host-start-btn {
+  display: block !important;
+  position: static !important;
+  margin: 2.8rem auto 0 !important;
+}
 
-/* ===========  BALANCE / BET ============================================= */
+/* ======================================================================= */
+/* ========== GAME TABLE (cards + betting area) ========================= */
+.table-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background: url('/src/assets/background.png') center/cover no-repeat;
+}
 .balance-section {
   font-size: 1.4rem;
   position: absolute;
@@ -134,15 +220,6 @@ body {
   padding: 6px 12px;
   border-radius: 8px;
 }
-
-/* ===========  GAME TABLE AREA =========================================== */
-.table-container {
-  width: 100vw;
-  height: 100vh;
-  position: relative;
-  background: url('/src/assets/background.png') center/cover no-repeat;
-}
-
 .dealer-area {
   position: absolute;
   top: 18%;
@@ -152,7 +229,6 @@ body {
   text-align: center;
   z-index: 1;
 }
-
 .player-area {
   position: absolute;
   bottom: 12%;
@@ -166,22 +242,12 @@ body {
   align-items: center;
   gap: 8px;
 }
-
 .dealer-area h2,
 .player-area h2 {
   font-size: 2.4rem;
 }
 
-.turn-indicator {
-  position: absolute;
-  top: 52%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 2.2rem;
-  text-align: center;
-}
-
-/* ===========  CARDS ===================================================== */
+/* Cards */
 .hand-display {
   display: flex;
   justify-content: center;
@@ -197,7 +263,8 @@ body {
   box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.5);
 }
 
-/* ===========  ACTIONS & CHIPS =========================================== */
+/* ======================================================================= */
+/* ========== ACTIONS & CHIPS =========================================== */
 .action-buttons {
   position: absolute;
   left: 5%;
@@ -230,7 +297,47 @@ body {
   cursor: pointer;
 }
 
-/* ===========  MULTIPLAYER LAYOUT ======================================== */
+/* ✅ new round button: restore to original */
+.new-round-button {
+  position: absolute;
+  top: 56%;
+  left: 5%;
+  z-index: 10;
+}
+
+/* ======================================================================= */
+/* ========== MESSAGES & INDICATORS ===================================== */
+.turn-indicator {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.2rem;
+  text-align: center;
+}
+.player-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.7rem;
+  padding: 10px 20px;
+  border-radius: 10px;
+  z-index: 9;
+}
+.game-over {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 2.2rem;
+  padding: 10px 20px;
+  border-radius: 10px;
+  z-index: 9;
+}
+
+/* ======================================================================= */
+/* ========== MULTIPLAYER PLAYER ROW ===================================== */
 .mp-players-row {
   position: absolute;
   bottom: 6%;
@@ -255,34 +362,4 @@ body {
 .player-result {
   font-size: 1.7rem;
   margin: 0;
-}
-
-/* ===========  MESSAGES ================================================== */
-.player-message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.7rem;
-  padding: 10px 20px;
-  border-radius: 10px;
-  z-index: 9;
-}
-.game-over {
-  position: absolute;
-  bottom: 22%;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 2.2rem;
-  padding: 10px 20px;
-  border-radius: 10px;
-  z-index: 9;
-}
-
-/* ===========  NEW ROUND ================================================= */
-.new-round-button {
-  position: absolute;
-  top: 56%;
-  left: 5%;
-  z-index: 10;
 }

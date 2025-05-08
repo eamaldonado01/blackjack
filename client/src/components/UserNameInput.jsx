@@ -15,7 +15,8 @@ export default function UsernameInput({ username, setUsername, onReady }) {
     value={username}
     onChange={(e) => setUsername(e.target.value)}
   />
-  {username && (
+</div>
+{username && (
     <div className="ready-wrapper">
       <button className="common-button" onClick={onReady}>
         Ready
@@ -23,8 +24,6 @@ export default function UsernameInput({ username, setUsername, onReady }) {
     </div>
   )}
 </div>
-    </div>
-
   );
 }
 
