@@ -18,6 +18,12 @@ import {
 } from 'firebase/database';
 import { rtdb } from './firebaseConfig';
 
+export const setupPresence = (rtdb, lobbyId, uid) => {
+  const ref = rtdb.ref(`/presence/${lobbyId}/${uid}`);
+  ref.set(true);
+  ref.onDisconnect().remove();
+};
+
 export const removePresence = async (lobbyId, uid) => {
   const beatRef = rtdbRef(rtdb, `lobbies/${lobbyId}/${uid}`);  // adjust if your path is 'presence'
   try {
@@ -65,82 +71,46 @@ export async function createLobby(db, lobbyData) {
  * Starts a new game round in the specified lobby.
  */
 export async function startGame(db, lobbyId, lobbyData) {
-  await runTransaction(db, async tx => {
-    const lobbyRef = doc(db, 'lobbies', lobbyId);
-    const gameRef = doc(db, 'lobbies', lobbyId, 'game', 'state');
+  if (lobbyData.status === 'playing') return;      // already started
+  if (!lobbyData.players?.length) throw new Error('No players in lobby');
 
-  await updateDoc(doc(db, 'lobbies', lobbyId), {
-    players  : arrayRemove(uid),
-    ready    : deleteField(),
-    bets     : deleteField(),
-    balances : deleteField(),
-    usernames: deleteField(),
+  /* ---------- build & shuffle deck ---------- */
+  let deck = shuffleDeck(createDeck());
+
+  /* ---------- initial hands ---------- */
+  const hands   = {};
+  const outcome = {};
+  lobbyData.players.forEach(p => {
+    hands[p] = [deck.pop(), deck.pop()];
+    outcome[p] = '';           // will be filled as the round plays out
+  });
+  const dealerHand = [deck.pop(), { rank: 'Hidden', suit: 'Hidden' }];
+
+  /* ---------- balances after taking bets ---------- */
+  const balances = { ...lobbyData.balances };
+  lobbyData.players.forEach(p => {
+    balances[p] = (balances[p] ?? 100) - (lobbyData.bets[p] || 0);
   });
 
+  /* ---------- persist game‑state + lobby header ---------- */
+  const gameStateDoc = doc(db, 'lobbies', lobbyId, 'game', 'state');
+  const lobbyDoc     = doc(db, 'lobbies', lobbyId);
 
-  const beat = ref(rtdb, `/presence/${lobbyId}/${uid}`);
-  // cancel the still‑armed onDisconnect
-  await onDisconnect(beat).cancel();
-  // tiny “tombstone” write to guarantee siblings see the delete
-  await set(beat, { leftAt: serverTimestamp() });
-   await remove(beat);
-
-    const lobbySnap = await tx.get(lobbyRef);
-    if (!lobbySnap.exists()) throw new Error('Lobby does not exist');
-
-    const lobby = lobbySnap.data();
-    const players = lobby.players;
-
-    const deck = shuffleDeck(createDeck());
-    const hands = {};
-    const bets = {};
-    const balances = {};
-    const outcome = {};
-
-    players.forEach(p => {
-      hands[p] = [deck.pop(), deck.pop()];
-      bets[p] = lobby.bets[p];
-      balances[p] = lobby.balances[p] - lobby.bets[p];
-      outcome[p] = '';
-    });
-
-    let currentIdx = players.findIndex(
-      p => calculateHandValue(hands[p]) !== 21
-    );
-    if (currentIdx === -1) currentIdx = players.length;
-
-    const gameDoc = {
+  await Promise.all([
+    setDoc(gameStateDoc, {
       deck,
+      dealerHand,
       hands,
-      dealerHand: [deck.pop(), { rank: 'Hidden', suit: 'Hidden' }],
-      bets,
+      bets      : { ...lobbyData.bets },
       balances,
-      currentIdx,
-      roundFinished: false,
+      currentIdx: 0,            // 0 ⇒ first player in lobbyData.players
       outcome,
-    };
+      roundFinished: false,
+    }),
+    updateDoc(lobbyDoc, { status: 'playing' }),
+  ]);
 
-    if (currentIdx >= players.length) {
-      const dealerHand = gameDoc.dealerHand;
-      dealerHand[1] = deck.pop();
-      while (calculateHandValue(dealerHand, true) < 17) dealerHand.push(deck.pop());
-
-      const dealerTot = calculateHandValue(dealerHand);
-      players.forEach(p => {
-        const ptot = calculateHandValue(hands[p]);
-        let msg = '', bal = balances[p];
-        if (dealerTot > 21 || ptot > dealerTot) { msg = 'Win!'; bal += bets[p] * 2; }
-        else if (ptot === dealerTot) { msg = 'Push'; bal += bets[p]; }
-        else { msg = 'Lose'; }
-        outcome[p] = msg;
-        balances[p] = bal;
-      });
-      gameDoc.roundFinished = true;
-    }
-
-    tx.set(gameRef, gameDoc);
-    tx.update(lobbyRef, { status: 'playing' });
-  });
+  dlog('Start game: deck size', deck.length);
 }
 
 /**

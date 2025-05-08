@@ -63,12 +63,14 @@ body {
 .username-container input{
   width:260px;height:52px;font-size:1.4rem;border-radius:8px;border:none;padding:8px 12px;
 }
-.username-container .common-button,
-.username-container .back-button{
-  position:static!important;
-  margin-top:18px;
-  
+/* === Ready button wrapper (below username card) === */
+.ready-wrapper {
+  position: absolute;
+  top: calc(55% + 140px);  /* 50% + height of join-container + margin */
+  left: 50%;
+  transform: translate(-50%, 0);
 }
+
 
 /* ===========  MENU PANEL ================================================ */
 .join-container {

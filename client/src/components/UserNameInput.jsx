@@ -8,24 +8,23 @@ export default function UsernameInput({ username, setUsername, onReady }) {
 
       {/* centred entry card ----------------------------------- */}
       <div className="join-container">
-        <h2>Enter your username:</h2>
-        <input
-          type="text"
-          placeholder="Username..."
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-      </div>
-
-      {/* ready button just beneath card ----------------------- */}
-      {username && (
-        <div className="ready-wrapper">
-          <button className="common-button" onClick={onReady}>
-            Ready
-          </button>
-        </div>
-      )}
+  <h2>Enter your username:</h2>
+  <input
+    type="text"
+    placeholder="Username..."
+    value={username}
+    onChange={(e) => setUsername(e.target.value)}
+  />
+  {username && (
+    <div className="ready-wrapper">
+      <button className="common-button" onClick={onReady}>
+        Ready
+      </button>
     </div>
+  )}
+</div>
+    </div>
+
   );
 }
 
