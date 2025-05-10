@@ -1,18 +1,17 @@
-const { randomInt } = require('crypto');
-const { v4: uuid } = require('uuid');
+// tests/load/helpers.js  – CommonJS
 
-function randomString() {
-    return Math.random().toString(36).substring(7);  // Generates random 5-7 char string
-  }
+const randString = (len) =>
+  Math.random().toString(36).slice(2, 2 + len);
+
 module.exports = {
-    randomString,
-    generateUniqueData: function (userContext, events, done) {
-      const uid = `user_${Math.floor(Math.random() * 1000000)}`;
-      const shard = Math.floor(Math.random() * 10) + 1;  // 1-10 shards
-      userContext.vars.uid = uid;
-      userContext.vars.shard = shard;
-      return done();
-    }
-  };
-  
-  
+  /**
+   * Fills `context.vars` with unique values for this VU.
+   * Artillery passes (context, events, done)
+   */
+  generateUniqueData (context, events, done) {
+    context.vars.uid        = randString(8);     // player id
+    context.vars.lobbyCode  = randString(4);     // lobby code
+    context.vars.shard      = Math.floor(Math.random() * 9); // 0‑8
+    return done();
+  }
+};

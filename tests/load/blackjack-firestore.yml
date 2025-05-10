@@ -1,10 +1,16 @@
 config:
   target: "https://firestore.googleapis.com"
   phases:
-  - duration: 60 
-    arrivalRate: 100  
-    rampTo: 300
+    # 60 s ramp from 60 → 120 patch writes s⁻¹  (keeps us under 500 / sec quota)
+    - duration: 60
+      arrivalRate: 100
+      rampTo: 300
   processor: "./helpers.js"
+
+  http:
+    timeout: 4000
+    keepAlive: false
+    
 scenarios:
   - flow:
       - function: "generateUniqueData"
@@ -14,10 +20,6 @@ scenarios:
             Content-Type: "application/json"
           json:
             fields:
-              username:
-                stringValue: "{{ uid }}"
-              balance:
-                integerValue: "500"
+              username: { stringValue: "{{ uid }}" }
+              balance:  { integerValue: "500" }
       - think: 1
-
-

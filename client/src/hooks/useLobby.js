@@ -33,7 +33,7 @@ export function setupPresence(lobbyId, uid) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Lobby hook  (all the Firestore logic you already had)
+// Lobby hook 
 // ────────────────────────────────────────────────────────────────────────────
 export function useLobby(username, uid) {
   const [lobbyId, setLobbyId] = useState(null);

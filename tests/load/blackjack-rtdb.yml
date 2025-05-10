@@ -1,24 +1,29 @@
+# tests/load/blackjack-rtdb.yml
 config:
   target: "https://blackjack-52623-default-rtdb.firebaseio.com"
   phases:
-  - duration: 60 
-    arrivalRate: 400  
-    rampTo: 500
+    - duration: 60
+      arrivalRate: 120
+      rampTo: 350        # ≈350 writes/s steady‑state
   processor: "./helpers.js"
-scenarios:
-  - flow:
-      - function: "generateUniqueData"
-      - put:
-          url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}.json"
-          json:
-            host: "{{ uid }}"
-            status: "waiting"
-      - patch:
-          url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}/game/state.json"
-          json:
-            deck: []
-            hands:
-              "{{ uid }}": [ { "rank": "7", "suit": "♣︎" } ]
-      - think: 1
+  http:                  # per‑request settings
+    timeout:    4000     # 4 s
+    keepAlive:  false    # close TCP after each write
 
+scenarios:
+  - name: "Shard fan‑out – create lobby & 1 action"
+    flow:
+      - loop:
+          - function: "generateUniqueData"
+          - put:
+              url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}.json"
+              json: { host: "{{ uid }}", status: "waiting" }
+          - patch:
+              url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}/game/state.json"
+              json:
+                deck: []
+                hands:
+                  "{{ uid }}": [{ "rank": "7", "suit": "clubs" }]
+          - think: 0.5
+        count: 1           # each VU does exactly one write pair, then exits
 
