@@ -1,24 +1,24 @@
 config:
   target: "https://blackjack-52623-default-rtdb.firebaseio.com"
   phases:
-  - duration: 60 
-    arrivalRate: 400  
-    rampTo: 500
+    - duration: 60
+      arrivalRate: 100
+      rampTo: 500
   processor: "./helpers.js"
+  plugins:
+    ensure: {}
 scenarios:
-  - flow:
-      - function: "generateUniqueData"
+  - name: "Global latency test: Create lobby & perform actions"
+    flow:
       - put:
-          url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}.json"
+          url: "/lobbies/{{ lobbyCode }}.json"
           json:
             host: "{{ uid }}"
             status: "waiting"
       - patch:
-          url: "/lobbies-shard{{ shard }}/{{ lobbyCode }}/game/state.json"
+          url: "/lobbies/{{ lobbyCode }}/game/state.json"
           json:
             deck: []
             hands:
               "{{ uid }}": [ { "rank": "7", "suit": "♣︎" } ]
       - think: 1
-
-

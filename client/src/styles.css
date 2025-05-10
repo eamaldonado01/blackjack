@@ -208,7 +208,7 @@ body {
   width: 100vw;
   height: 100vh;
   position: relative;
-  background: url('/src/assets/background.png') center/cover no-repeat;
+  background: url('/src/assets/background.webp') center/cover no-repeat;
 }
 .balance-section {
   font-size: 1.4rem;

@@ -1,0 +1,155 @@
+[
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0,
+    "values": [
+      0,
+      0,
+      0
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "bf-cache",
+    "level": "error",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Page prevented back/forward cache restoration",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/bf-cache/"
+  },
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0,
+    "values": [
+      0,
+      0,
+      0
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "first-contentful-paint",
+    "level": "warn",
+    "url": "http://localhost:5173/",
+    "auditTitle": "First Contentful Paint",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/first-contentful-paint/"
+  },
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0,
+    "values": [
+      0,
+      0,
+      0
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "largest-contentful-paint",
+    "level": "warn",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Largest Contentful Paint",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/lighthouse-largest-contentful-paint/"
+  },
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0.11,
+    "values": [
+      0.11,
+      0.11,
+      0.11
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "speed-index",
+    "level": "warn",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Speed Index",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/speed-index/"
+  },
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0.5,
+    "values": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "total-byte-weight",
+    "level": "error",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Avoid enormous network payloads",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/total-byte-weight/"
+  },
+  {
+    "name": "maxLength",
+    "expected": 0,
+    "actual": 20,
+    "values": [
+      20,
+      20,
+      20
+    ],
+    "operator": "<=",
+    "passed": false,
+    "auditId": "unminified-javascript",
+    "level": "error",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Minify JavaScript",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/unminified-javascript/"
+  },
+  {
+    "name": "maxLength",
+    "expected": 0,
+    "actual": 5,
+    "values": [
+      5,
+      5,
+      5
+    ],
+    "operator": "<=",
+    "passed": false,
+    "auditId": "unused-javascript",
+    "level": "error",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Reduce unused JavaScript",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/unused-javascript/"
+  },
+  {
+    "name": "maxLength",
+    "expected": 0,
+    "actual": 21,
+    "values": [
+      21,
+      21,
+      21
+    ],
+    "operator": "<=",
+    "passed": false,
+    "auditId": "uses-text-compression",
+    "level": "error",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Enable text compression",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/uses-text-compression/"
+  },
+  {
+    "name": "minScore",
+    "expected": 0.9,
+    "actual": 0.04,
+    "values": [
+      0.04,
+      0.04,
+      0.04
+    ],
+    "operator": ">=",
+    "passed": false,
+    "auditId": "interactive",
+    "level": "warn",
+    "url": "http://localhost:5173/",
+    "auditTitle": "Time to Interactive",
+    "auditDocumentationLink": "https://developer.chrome.com/docs/lighthouse/performance/interactive/"
+  }
+]

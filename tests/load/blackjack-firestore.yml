@@ -1,0 +1,23 @@
+config:
+  target: "https://firestore.googleapis.com"
+  phases:
+  - duration: 60 
+    arrivalRate: 100  
+    rampTo: 300
+  processor: "./helpers.js"
+scenarios:
+  - flow:
+      - function: "generateUniqueData"
+      - patch:
+          url: "/v1/projects/blackjack-52623/databases/(default)/documents/leaderboard/{{ uid }}"
+          headers:
+            Content-Type: "application/json"
+          json:
+            fields:
+              username:
+                stringValue: "{{ uid }}"
+              balance:
+                integerValue: "500"
+      - think: 1
+
+

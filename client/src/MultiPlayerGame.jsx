@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
 import { getCardImage, calculateHandValue } from './utils/GameHelpers';
-import chip5   from './assets/chips/5.png';
-import chip10  from './assets/chips/10.png';
-import chip25  from './assets/chips/25.png';
-import chip50  from './assets/chips/50.png';
-import chip100 from './assets/chips/100.png';
+import chip5 from './assets/chips/5.webp';
+import chip10 from './assets/chips/10.webp';
+import chip25 from './assets/chips/25.webp';
+import chip50 from './assets/chips/50.webp';
+import chip100 from './assets/chips/100.webp';
 
 export default function MultiPlayerGame({
   onBack, uid, lobbyId, lobbyData,
@@ -128,7 +128,7 @@ export default function MultiPlayerGame({
       <div className="dealer-area">
         <h2>Dealer – {dealerTotal}</h2>
         <div className="hand-display">
-          {dealerHand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card"/> )}
+          {dealerHand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card" loading="lazy" />)}
         </div>
       </div>
 
@@ -150,7 +150,7 @@ export default function MultiPlayerGame({
           return (
             <div className="mp-player-area" key={pid}>
               <div className="hand-display">
-                {hand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card"/>)}
+                {hand.map((c,i)=><img key={i} src={getCardImage(c)} className="card-image" alt="card" loading="lazy" />)}
               </div>
               <h3 className="player-name">
                 {lobbyData.usernames[pid]} – {calculateHandValue(hand)}
