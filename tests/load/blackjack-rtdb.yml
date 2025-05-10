@@ -1,0 +1,24 @@
+config:
+  target: "http://127.0.0.1:9000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      rampTo: 300
+  processor: "./helpers.js"
+  plugins:
+    ensure: {}
+scenarios:
+  - name: "Create lobby & perform actions"
+    flow:
+      - put:
+          url: "/lobbies/{{ lobbyCode }}.json"
+          json:
+            host: "{{ uid }}"
+            status: "waiting"
+      - patch:
+          url: "/lobbies/{{ lobbyCode }}/game/state.json"
+          json:
+            deck: []
+            hands:
+              "{{ uid }}": [ { "rank": "7", "suit": "♣︎" } ]
+      - think: 1

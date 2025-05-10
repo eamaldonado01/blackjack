@@ -147,7 +147,7 @@ body {
   box-sizing: border-box;
 }
 .leaderboard h2 {
-  font-size: 1.3rem; /* ✅ match Welcome */
+  font-size: 1.3rem; 
   margin-bottom: 16px;
 }
 .leaderboard ol {
@@ -156,7 +156,7 @@ body {
   padding: 0;
 }
 .leaderboard li {
-  font-size: 1.3rem; /* ✅ match Welcome */
+  font-size: 1.3rem; 
   margin: 10px 0;
 }
 

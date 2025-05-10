@@ -14,5 +14,9 @@
         "npm --prefix \"$RESOURCE_DIR\" run lint"
       ]
     }
-  ]
+  ],
+  "emulators": {
+    "database": { "port": 9000 },
+    "firestore": { "port": 8080 }
+  }
 }

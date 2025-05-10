@@ -1,0 +1,8 @@
+16:43:45.676 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+16:43:45.728 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
+16:56:22.378 [NamespaceSystem-akka.actor.default-dispatcher-9] INFO com.firebase.core.namespace.NamespaceActor - blackjack-52623 successfully activated FBKV (SurveyIdle(0)) wait: 55ms, init: 0ms
+16:58:54.962 [FirebaseWorkerPool-1-1] WARN com.firebase.core.persistence.backend.dummy.EmulatorMetadataPersistence - Multiple projectIds are not recommended in single project mode. Requested 
+namespace fake-server, but the emulator is configured for blackjack-52623. To 
+opt-out of single project mode add/set the singleProjectMode: false property in 
+the firebase.json emulators config. 
+16:58:54.966 [NamespaceSystem-akka.actor.default-dispatcher-17] INFO com.firebase.core.namespace.NamespaceActor - fake-server successfully activated FBKV (SurveyIdle(0)) wait: 2ms, init: 0ms
