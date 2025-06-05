@@ -57,4 +57,4 @@ The steps below assume no dependencies are installed on your machine.
 
 8. Open your browser and navigate to `http://localhost:5173` to play the game.
 
-You should now be able to create lobbies and play Blackjack locally in single‑player or multiplayer mode.
+You should now be able to create lobbies and play Blackjack locally in single‑player or multiplayer mode with friends. If you wish to play with other people, simply have your friend run these steps too and join your lobby.
